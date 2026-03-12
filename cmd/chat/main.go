@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
 	"net/http"
@@ -11,38 +12,45 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/a-h/templ"
+	"golang.org/x/time/rate"
 
-	"github.com/stolasapp/chat/internal/static"
-	"github.com/stolasapp/chat/internal/view"
+	"github.com/stolasapp/chat/internal/hub"
+	"github.com/stolasapp/chat/internal/server"
+	"github.com/stolasapp/chat/internal/ws"
 )
 
 const (
-	readHeaderTimeout = 10 * time.Second
-	shutdownTimeout   = 10 * time.Second
+	ipRateBurst     = 5
+	limiterCleanup  = 5 * time.Minute
+	limiterMaxAge   = 10 * time.Minute
+	shutdownTimeout = 10 * time.Second
 )
 
 func main() {
 	addr := flag.String("addr", envOr("ADDR", ":8080"), "listen address")
 	flag.Parse()
 
-	mux := http.NewServeMux()
+	wsHub := hub.NewHub()
+	limiter := ws.NewIPLimiter(rate.Limit(1), ipRateBurst)
 
-	mux.Handle("GET /", templ.Handler(view.LandingPage()))
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	srv := &http.Server{
-		Addr:              *addr,
-		Handler:           mux,
-		ReadHeaderTimeout: readHeaderTimeout,
-	}
+	go wsHub.Run(ctx)
+	go limiterCleanupLoop(ctx, limiter)
+
+	srv := server.New(server.Config{
+		Addr:      *addr,
+		Hub:       wsHub,
+		IPLimiter: limiter,
+	})
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		slog.Info("server starting", "addr", *addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server failed", "error", err)
 			os.Exit(1)
 		}
@@ -51,14 +59,29 @@ func main() {
 	<-done
 	slog.Info("shutting down")
 
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("shutdown failed", "error", err)
+	// stop accepting new connections first, then stop the hub
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("http shutdown failed", "error", err)
 	}
+	cancel()
 
 	slog.Info("server stopped")
+}
+
+func limiterCleanupLoop(ctx context.Context, limiter *ws.IPLimiter) {
+	ticker := time.NewTicker(limiterCleanup)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			limiter.Cleanup(limiterMaxAge)
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func envOr(key, fallback string) string {

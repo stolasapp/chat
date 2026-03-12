@@ -7,7 +7,12 @@ tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 )
 
-require github.com/a-h/templ v0.3.1001
+require (
+	github.com/a-h/templ v0.3.1001
+	github.com/gorilla/websocket v1.5.3
+	github.com/stretchr/testify v1.11.1
+	golang.org/x/time v0.15.0
+)
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
@@ -185,7 +190,6 @@ require (
 	github.com/ssgreg/nlreturn/v2 v2.2.1 // indirect
 	github.com/stbenjam/no-sprintf-host-port v0.3.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/tetafro/godot v1.5.4 // indirect
 	github.com/timakin/bodyclose v0.0.0-20241222091800-1db5c5ca4d67 // indirect
