@@ -1,0 +1,131 @@
+package view
+
+import "strings"
+
+templ LandingPage() {
+	@Layout("Stolas Chat") {
+		<div class="min-h-full flex items-center justify-center p-4">
+			<div class="w-full max-w-md space-y-6">
+				<div class="text-center">
+					<h1 class="text-2xl font-bold">Stolas Chat</h1>
+					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+						Anonymous matchmaking chat
+					</p>
+				</div>
+				<form id="demographics-form" class="space-y-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+					@aboutYouSection()
+					<hr class="border-gray-200 dark:border-gray-700"/>
+					@lookingForSection()
+					<button
+						type="button"
+						id="find-match-btn"
+						disabled
+						class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						Find a Match
+					</button>
+				</form>
+			</div>
+		</div>
+	}
+}
+
+templ aboutYouSection() {
+	<fieldset>
+		<legend class="text-lg font-semibold">About You</legend>
+		<div class="mt-4 space-y-4">
+			@selectGroup("gender", "Gender", Genders)
+			@selectGroup("role", "Role", Roles)
+			@interestPicker("interests", "Interests", InterestGroups)
+		</div>
+	</fieldset>
+}
+
+templ lookingForSection() {
+	<fieldset>
+		<legend class="text-lg font-semibold">Looking For</legend>
+		<div class="mt-4 space-y-4">
+			@optionCheckboxGroup("filter_gender", "Partner Gender", Genders)
+			@optionCheckboxGroup("filter_role", "Partner Role", Roles)
+			@interestPicker("exclude_interests", "Exclude Interests", InterestGroups)
+		</div>
+	</fieldset>
+}
+
+templ selectGroup(name string, label string, options []selectOption) {
+	<div>
+		<label for={ name } class="block text-sm font-medium">{ label }</label>
+		<select
+			id={ name }
+			name={ name }
+			class="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+		>
+			<option value="">Select...</option>
+			for _, opt := range options {
+				<option value={ opt.Value }>{ opt.Label }</option>
+			}
+		</select>
+	</div>
+}
+
+templ optionCheckboxGroup(name string, label string, options []selectOption) {
+	<div>
+		<label class="block text-sm font-medium">{ label }</label>
+		<div class="mt-1 grid grid-cols-2 gap-2">
+			for _, opt := range options {
+				<label class="inline-flex items-center gap-1.5 text-sm">
+					<input
+						type="checkbox"
+						name={ name }
+						value={ opt.Value }
+						class="rounded text-indigo-600 focus:ring-indigo-500"
+					/>
+					{ opt.Label }
+				</label>
+			}
+		</div>
+	</div>
+}
+
+templ interestPicker(name string, label string, groups []InterestGroup) {
+	<div class="interest-picker" data-name={ name }>
+		<label class="block text-sm font-medium mb-1">{ label }</label>
+		<div class="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 overflow-hidden">
+			<!-- Selected tags -->
+			<div class="interest-tags hidden flex-wrap gap-1.5 p-2 border-b border-gray-200 dark:border-gray-600"></div>
+			<!-- Search input -->
+			<input
+				type="text"
+				placeholder="Search..."
+				class="interest-search block w-full px-3 py-1.5 text-sm bg-transparent border-b border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-indigo-500"
+			/>
+			<!-- Grouped checkboxes -->
+			<div class="interest-groups max-h-48 overflow-y-auto space-y-1 p-2">
+				for _, group := range groups {
+					<div class="interest-group">
+						<button
+							type="button"
+							class="interest-group-toggle flex items-center gap-1 w-full text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide py-1 hover:text-gray-700 dark:hover:text-gray-200"
+						>
+							<span class="interest-group-arrow text-[10px]">&#9660;</span>
+							{ group.Name }
+						</button>
+						<div class="interest-group-items grid grid-cols-2 gap-1 pb-1">
+							for _, item := range group.Items {
+								<label class="interest-item inline-flex items-center gap-1.5 text-sm" data-value={ item }>
+									<input
+										type="checkbox"
+										name={ name }
+										value={ item }
+										class="rounded text-indigo-600 focus:ring-indigo-500"
+									/>
+									{ strings.ToUpper(item[:1]) + item[1:] }
+								</label>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+}

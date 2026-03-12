@@ -1,0 +1,78 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+version: "2"
+output:
+  sort-order:
+    - file
+    - severity
+    - linter
+linters:
+  default: all
+  disable:
+    - cyclop
+    - dupl
+    - err113
+    - exhaustive
+    - exhaustruct
+    - funlen
+    - gochecknoglobals
+    - ireturn
+    - nlreturn
+    - noinlineerr
+    - nonamedreturns
+    - testpackage
+    - wrapcheck
+    - wsl
+    - wsl_v5
+  settings:
+    depguard:
+      rules:
+        main:
+          files:
+            - $all
+          deny:
+            - pkg: math/rand$
+              desc: use math/rand/v2
+    godox:
+      keywords:
+        - FIXME
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+    varnamelen:
+      ignore-decls:
+        - ok bool
+        - sb *strings.Builder
+        - w io.Writer
+        - ws *websocket.Conn
+  exclusions:
+    generated: lax
+    rules:
+      # looser rules for tests
+      - linters:
+          - gochecknoglobals
+          - goconst
+        path: _test\.go$
+      # templ produces "package godoc comments" which confuse revive & godoclint
+      - linters:
+          - revive
+        text: "package-comments: should have a package comment"
+        path: internal/view/
+      - linters:
+          - godoclint
+        text: package has more than one godoc
+        path: internal/view/
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/stolasapp/chat
+  exclusions:
+    generated: lax

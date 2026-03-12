@@ -1,0 +1,12 @@
+# IDE
+.idea/
+.vscode/
+
+# Go
+/bin/
+
+# templ
+*_templ.txt
+
+# OS
+.DS_Store
