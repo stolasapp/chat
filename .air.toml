@@ -1,0 +1,19 @@
+# Air configuration for hot-reload development
+# https://github.com/air-verse/air/blob/master/air_example.toml
+
+root = "."
+tmp_dir = "bin"
+
+[build]
+log = "air.log"
+bin = "./bin/chat"
+args_bin = ["-debug"]
+cmd = "go tool templ generate && go build -o ./bin/chat ./cmd/chat"
+include_ext = ["go", "templ", "js"]
+exclude_dir = ["bin"]
+exclude_file = []
+exclude_regex = ["_test.go", "_templ.go"]
+exclude_unchanged = true
+include_file = []
+send_interrupt = true
+kill_delay = "5s"

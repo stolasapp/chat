@@ -1,55 +1,58 @@
 package view
 
+import "github.com/stolasapp/chat/internal/catalog"
+
 // selectOption is a value/label pair for select elements.
 type selectOption struct {
 	Value string
 	Label string
 }
 
-// Genders is the list of gender options for the demographics form.
-var Genders = []selectOption{
-	{Value: "male", Label: "Male"},
-	{Value: "female", Label: "Female"},
-	{Value: "gender-fluid", Label: "Gender Fluid"},
-	{Value: "nonbinary", Label: "Non-Binary"},
-	{Value: "agender", Label: "Agender"},
-	{Value: "other", Label: "Other"},
-}
+// genderOpts is computed once from the static catalog.
+var genderOpts = func() []selectOption {
+	genders := catalog.Genders()
+	opts := make([]selectOption, len(genders))
+	for idx, gender := range genders {
+		opts[idx] = selectOption{Value: gender.String(), Label: gender.Label()}
+	}
+	return opts
+}()
 
-// Roles is the list of role options for the demographics form.
-var Roles = []selectOption{
-	{Value: "dominant", Label: "Dominant"},
-	{Value: "submissive", Label: "Submissive"},
-	{Value: "switch", Label: "Switch"},
-}
+// roleOpts is computed once from the static catalog.
+var roleOpts = func() []selectOption {
+	roles := catalog.Roles()
+	opts := make([]selectOption, len(roles))
+	for idx, role := range roles {
+		opts[idx] = selectOption{Value: role.String(), Label: role.Label()}
+	}
+	return opts
+}()
 
-// InterestGroup is a named category of interests.
-type InterestGroup struct {
+// interestGroup is a view-layer interest group with string values
+// for template rendering.
+type interestGroup struct {
 	Name  string
-	Items []string
+	Items []interestItem
 }
 
-// InterestGroups is the categorized list of interests for the
-// demographics form. Placeholder sports categories for now.
-var InterestGroups = []InterestGroup{
-	{
-		Name: "Team Sports",
-		Items: []string{
-			"basketball",
-			"soccer",
-			"baseball",
-			"hockey",
-			"volleyball",
-		},
-	},
-	{
-		Name: "Individual Sports",
-		Items: []string{
-			"tennis",
-			"swimming",
-			"track",
-			"golf",
-			"cycling",
-		},
-	},
+type interestItem struct {
+	Value string
+	Label string
 }
+
+// interestGroupOpts is computed once from the static catalog.
+var interestGroupOpts = func() []interestGroup {
+	catalogGroups := catalog.Groups()
+	viewGroups := make([]interestGroup, len(catalogGroups))
+	for idx, group := range catalogGroups {
+		items := make([]interestItem, len(group.Items))
+		for jdx, item := range group.Items {
+			items[jdx] = interestItem{Value: item.String(), Label: item.Label()}
+		}
+		viewGroups[idx] = interestGroup{
+			Name:  group.Category.Label(),
+			Items: items,
+		}
+	}
+	return viewGroups
+}()

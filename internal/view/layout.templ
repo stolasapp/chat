@@ -13,8 +13,9 @@ templ Layout(title string) {
 					darkMode: 'media',
 				};
 			</script>
-			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-M06VwgoUOHG3FN0UchwWKqh9jS4ejwpoL0yjF3EVljtsxFwFETEYMkyNl5lXbJ5/" crossorigin="anonymous"></script>
+			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
 			<script src="https://unpkg.com/htmx-ext-ws@2.0.3/ws.js" integrity="sha384-IeVkDiDIU+Zsabm4HnVf7ifa7LYLSoUCAYrFIjsn+0voIDaflLAalBqJ4CeEZodl" crossorigin="anonymous"></script>
+			@elementIDs()
 			<script src="/static/app.js" defer></script>
 		</head>
 		<body class="h-full bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">

@@ -3,85 +3,48 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
-
-	"golang.org/x/time/rate"
 
 	"github.com/stolasapp/chat/internal/hub"
+	"github.com/stolasapp/chat/internal/match"
 	"github.com/stolasapp/chat/internal/server"
-	"github.com/stolasapp/chat/internal/ws"
-)
-
-const (
-	ipRateBurst     = 5
-	limiterCleanup  = 5 * time.Minute
-	limiterMaxAge   = 10 * time.Minute
-	shutdownTimeout = 10 * time.Second
 )
 
 func main() {
 	addr := flag.String("addr", envOr("ADDR", ":8080"), "listen address")
+	debug := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
 
-	wsHub := hub.NewHub()
-	limiter := ws.NewIPLimiter(rate.Limit(1), ipRateBurst)
+	level := slog.LevelInfo
+	if *debug {
+		level = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	defer hubCancel()
 
-	go wsHub.Run(ctx)
-	go limiterCleanupLoop(ctx, limiter)
-
-	srv := server.New(server.Config{
-		Addr:      *addr,
-		Hub:       wsHub,
-		IPLimiter: limiter,
-	})
-
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+	matcher := match.NewMatcher(match.DefaultMatchTimeout)
+	wsHub := hub.NewHub(matcher)
 
 	go func() {
-		slog.Info("server starting", "addr", *addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server failed", "error", err)
-			os.Exit(1)
-		}
+		defer hubCancel()
+		sigCtx, stop := signal.NotifyContext(hubCtx, syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		server.New(server.Config{
+			Addr: *addr,
+			Hub:  wsHub,
+		}).ListenAndServe(sigCtx)
 	}()
 
-	<-done
-	slog.Info("shutting down")
-
-	// stop accepting new connections first, then stop the hub
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer shutdownCancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Error("http shutdown failed", "error", err)
-	}
-	cancel()
+	// blocks until hub context is canceled and all clients are drained
+	wsHub.Run(hubCtx)
 
 	slog.Info("server stopped")
-}
-
-func limiterCleanupLoop(ctx context.Context, limiter *ws.IPLimiter) {
-	ticker := time.NewTicker(limiterCleanup)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			limiter.Cleanup(limiterMaxAge)
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 func envOr(key, fallback string) string {

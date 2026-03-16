@@ -12,19 +12,19 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/time/rate"
 
 	"github.com/stolasapp/chat/internal/hub"
+	"github.com/stolasapp/chat/internal/match"
 )
 
-func dialTestServer(t *testing.T, limiter *IPLimiter) (*hub.Hub, *websocket.Conn, func()) {
+func dialTestServer(t *testing.T) (*hub.Hub, *websocket.Conn, func()) {
 	t.Helper()
 
-	wsHub := hub.NewHub()
+	wsHub := hub.NewHub(match.NewMatcher(match.DefaultMatchTimeout))
 	ctx, cancel := context.WithCancel(context.Background())
 	go wsHub.Run(ctx)
 
-	srv := httptest.NewServer(NewHandler(wsHub, limiter, nil))
+	srv := httptest.NewServer(NewHandler(wsHub, nil))
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
 
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -58,8 +58,7 @@ func readTokenMessage(t *testing.T, conn *websocket.Conn) hub.TokenMessage {
 func TestHandler_TokenOnConnect(t *testing.T) {
 	t.Parallel()
 
-	limiter := NewIPLimiter(rate.Limit(10), 10)
-	_, conn, cleanup := dialTestServer(t, limiter)
+	_, conn, cleanup := dialTestServer(t)
 	defer cleanup()
 
 	token := readTokenMessage(t, conn)
@@ -72,8 +71,7 @@ func TestHandler_TokenOnConnect(t *testing.T) {
 func TestHandler_ClientRegistered(t *testing.T) {
 	t.Parallel()
 
-	limiter := NewIPLimiter(rate.Limit(10), 10)
-	wsHub, conn, cleanup := dialTestServer(t, limiter)
+	wsHub, conn, cleanup := dialTestServer(t)
 	defer cleanup()
 
 	readTokenMessage(t, conn)
@@ -84,15 +82,14 @@ func TestHandler_ClientRegistered(t *testing.T) {
 func TestHandler_UniqueTokens(t *testing.T) {
 	t.Parallel()
 
-	limiter := NewIPLimiter(rate.Limit(100), 100)
-	wsHub := hub.NewHub()
+	wsHub := hub.NewHub(match.NewMatcher(match.DefaultMatchTimeout))
 	go wsHub.Run(t.Context())
 
-	srv := httptest.NewServer(NewHandler(wsHub, limiter, nil))
+	srv := httptest.NewServer(NewHandler(wsHub, nil))
 	defer srv.Close()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
 
-	tokens := make(map[string]struct{})
+	tokens := make(map[match.Token]struct{})
 	conns := make([]*websocket.Conn, 5)
 	for idx := range conns {
 		conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -116,29 +113,39 @@ func TestHandler_UniqueTokens(t *testing.T) {
 func TestHandler_RateLimited(t *testing.T) {
 	t.Parallel()
 
-	limiter := NewIPLimiter(rate.Limit(0.1), 1)
-	wsHub := hub.NewHub()
+	wsHub := hub.NewHub(match.NewMatcher(match.DefaultMatchTimeout))
 	go wsHub.Run(t.Context())
 
-	srv := httptest.NewServer(NewHandler(wsHub, limiter, nil))
+	handler := NewHandler(wsHub, nil)
+	srv := httptest.NewServer(handler)
 	defer srv.Close()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
 
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, err)
+	// exhaust the burst (ipBurst = 5)
+	conns := make([]*websocket.Conn, ipBurst)
+	for idx := range conns {
+		conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		require.NoError(t, err)
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+		conns[idx] = conn
+	}
+	defer func() {
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
+	}()
+
+	// next connection should be rate limited
+	rateLimitedConn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err, "upgrade should succeed even when rate limited")
 	if resp != nil && resp.Body != nil {
 		_ = resp.Body.Close()
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = rateLimitedConn.Close() }()
 
-	conn2, resp2, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, err, "upgrade should succeed even when rate limited")
-	if resp2 != nil && resp2.Body != nil {
-		_ = resp2.Body.Close()
-	}
-	defer func() { _ = conn2.Close() }()
-
-	_, msg, err := conn2.ReadMessage()
+	_, msg, err := rateLimitedConn.ReadMessage()
 	require.NoError(t, err)
 
 	var env hub.Envelope
@@ -149,19 +156,18 @@ func TestHandler_RateLimited(t *testing.T) {
 	require.NoError(t, json.Unmarshal(env.Payload, &rateLimited))
 	assert.Greater(t, rateLimited.RetryAfter, time.Duration(0))
 
-	_, _, err = conn2.ReadMessage()
+	_, _, err = rateLimitedConn.ReadMessage()
 	assert.Error(t, err)
 }
 
 func TestHandler_CheckOrigin_AllowedList(t *testing.T) {
 	t.Parallel()
 
-	limiter := NewIPLimiter(rate.Limit(100), 100)
-	wsHub := hub.NewHub()
+	wsHub := hub.NewHub(match.NewMatcher(match.DefaultMatchTimeout))
 	go wsHub.Run(t.Context())
 
 	allowed := []string{"http://example.com", "https://chat.example.com"}
-	srv := httptest.NewServer(NewHandler(wsHub, limiter, allowed))
+	srv := httptest.NewServer(NewHandler(wsHub, allowed))
 	defer srv.Close()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
 
@@ -185,11 +191,10 @@ func TestHandler_CheckOrigin_AllowedList(t *testing.T) {
 func TestHandler_CheckOrigin_SameHost(t *testing.T) {
 	t.Parallel()
 
-	limiter := NewIPLimiter(rate.Limit(100), 100)
-	wsHub := hub.NewHub()
+	wsHub := hub.NewHub(match.NewMatcher(match.DefaultMatchTimeout))
 	go wsHub.Run(t.Context())
 
-	srv := httptest.NewServer(NewHandler(wsHub, limiter, nil))
+	srv := httptest.NewServer(NewHandler(wsHub, nil))
 	defer srv.Close()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
 

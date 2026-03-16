@@ -45,6 +45,8 @@ linters:
       require-explanation: true
       require-specific: true
       allow-unused: false
+    sloglint:
+      attr-only: true
     varnamelen:
       ignore-decls:
         - ok bool
@@ -52,21 +54,24 @@ linters:
         - w io.Writer
         - ws *websocket.Conn
   exclusions:
-    generated: lax
+    generated: strict
     rules:
       # looser rules for tests
       - linters:
           - gochecknoglobals
           - goconst
         path: _test\.go$
-      # templ produces "package godoc comments" which confuse revive & godoclint
+      # contextcheck traces into templ-generated closures (named
+      # $1) and cannot follow context through SendComponent ->
+      # templ.Component.Render(ctx, w)
+      - linters:
+          - contextcheck
+        text: '\$1.+ should pass the context parameter'
+      # package comment lives in templ-generated files (excluded
+      # by generated: strict)
       - linters:
           - revive
         text: "package-comments: should have a package comment"
-        path: internal/view/
-      - linters:
-          - godoclint
-        text: package has more than one godoc
         path: internal/view/
 issues:
   max-issues-per-linter: 0

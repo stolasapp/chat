@@ -3,7 +3,10 @@ package hub
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
+
+	"github.com/stolasapp/chat/internal/match"
 )
 
 // MessageType identifies the kind of message in a WebSocket envelope.
@@ -13,17 +16,13 @@ type MessageType string
 const (
 	MessageTypeToken       MessageType = "token"
 	MessageTypeFindMatch   MessageType = "find_match"
-	MessageTypeCancelMatch MessageType = "cancel_match"
-	MessageTypeMessage     MessageType = "message"
-	MessageTypeKeyExchange MessageType = "key_exchange"
 	MessageTypeLeave       MessageType = "leave"
-	MessageTypeReconnect   MessageType = "reconnect"
+	MessageTypeMessage     MessageType = "message"
 	MessageTypeRateLimited MessageType = "rate_limited"
 )
 
 // Message is implemented by all typed WebSocket payloads. Each
-// concrete type maps to exactly one MessageType. The method is
-// exported so callers outside the hub package can construct messages.
+// concrete type maps to exactly one MessageType.
 type Message interface {
 	MessageType() MessageType
 }
@@ -47,6 +46,34 @@ func NewEnvelope(msg Message) (Envelope, error) {
 	}, nil
 }
 
+// Parse unmarshals the envelope payload into the appropriate
+// typed message based on Type.
+func (e Envelope) Parse() (Message, error) {
+	switch e.Type {
+	case MessageTypeToken:
+		return unmarshalPayload[TokenMessage](e.Payload)
+	case MessageTypeFindMatch:
+		return unmarshalPayload[FindMatchMessage](e.Payload)
+	case MessageTypeLeave:
+		return LeaveMessage{}, nil
+	case MessageTypeMessage:
+		return unmarshalPayload[ChatMessage](e.Payload)
+	case MessageTypeRateLimited:
+		return unmarshalPayload[RateLimitedMessage](e.Payload)
+	default:
+		return nil, fmt.Errorf("unknown message type: %q", e.Type)
+	}
+}
+
+func unmarshalPayload[T Message](payload json.RawMessage) (T, error) {
+	var msg T
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		var zero T
+		return zero, fmt.Errorf("unmarshal %T: %w", msg, err)
+	}
+	return msg, nil
+}
+
 // MarshalMessage creates an Envelope from a Message and returns its
 // JSON encoding. This is the common path for both channel-based
 // sends (Client.Send) and direct writes (writeEnvelope).
@@ -61,21 +88,50 @@ func MarshalMessage(msg Message) ([]byte, error) {
 // TokenMessage is sent to the client on initial connection with
 // session and refresh tokens.
 type TokenMessage struct {
-	Token   string `json:"token"`
-	Refresh string `json:"refresh"`
+	Token   match.Token `json:"token"`
+	Refresh match.Token `json:"refresh"`
 }
 
 // MessageType implements Message.
 func (TokenMessage) MessageType() MessageType { return MessageTypeToken }
 
+// FindMatchMessage is sent by the client to enter the match queue.
+// When Block is true, the client's last partner is added to the
+// block list before re-queuing.
+type FindMatchMessage struct {
+	match.Profile
+
+	Block bool `json:"block,omitempty"`
+}
+
+// MessageType implements Message.
+func (FindMatchMessage) MessageType() MessageType { return MessageTypeFindMatch }
+
+// LeaveMessage is sent by the client to leave the current chat.
+type LeaveMessage struct{}
+
+// MessageType implements Message.
+func (LeaveMessage) MessageType() MessageType { return MessageTypeLeave }
+
+// ChatMessage is sent by the client to relay a text message
+// to their partner.
+type ChatMessage struct {
+	Text string `json:"text"`
+}
+
+// MessageType implements Message.
+func (ChatMessage) MessageType() MessageType { return MessageTypeMessage }
+
 // RateLimitedMessage is sent when a client exceeds the connection
 // rate limit, indicating how long to wait before retrying.
+//
+//nolint:recvcheck // MarshalJSON requires value receiver, UnmarshalJSON requires pointer
 type RateLimitedMessage struct {
 	RetryAfter time.Duration `json:"-"`
 }
 
 // MessageType implements Message.
-func (*RateLimitedMessage) MessageType() MessageType { return MessageTypeRateLimited }
+func (RateLimitedMessage) MessageType() MessageType { return MessageTypeRateLimited }
 
 // MarshalJSON encodes RetryAfter as seconds.
 func (m RateLimitedMessage) MarshalJSON() ([]byte, error) {

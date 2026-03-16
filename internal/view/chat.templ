@@ -1,36 +1,79 @@
 package view
 
-templ Chat() {
-	<div id="content" class="min-h-full flex flex-col max-w-2xl mx-auto p-4">
+// ChatView renders the chat interface with a collapsible
+// profile panel. Sent as an OOB swap to replace the content
+// area.
+templ ChatView() {
+	<div id={ ElementContent } hx-swap-oob="true" class="h-full flex flex-col max-w-2xl mx-auto p-4 pb-6 overflow-hidden">
 		<div class="flex items-center justify-between py-2">
 			<h2 class="text-lg font-semibold">Chat</h2>
-			<button
-				type="button"
-				id="leave-btn"
-				class="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
+			<label
+				for="settings-toggle"
+				class="cursor-pointer rounded-md bg-gray-200 dark:bg-gray-700 px-3 py-1.5 text-sm font-semibold shadow-sm hover:bg-gray-300 dark:hover:bg-gray-600 select-none"
 			>
-				Leave
-			</button>
+				Settings
+			</label>
 		</div>
+		<!-- Hidden checkbox drives the panel visibility via CSS -->
+		<input type="checkbox" id="settings-toggle" class="peer hidden"/>
+		<!-- Settings panel: when open, takes all remaining space -->
+		<div class="hidden peer-checked:flex flex-1 min-h-0 flex-col bg-white dark:bg-gray-800 shadow rounded-lg p-4 overflow-y-auto">
+			<form id={ ElementProfileForm } class="space-y-4">
+				<input type="hidden" name="type" value="find_match"/>
+				@aboutYouSection()
+				<hr class="border-gray-200 dark:border-gray-700"/>
+				@lookingForSection()
+			</form>
+		</div>
+		<!-- Messages area: hidden when settings is open -->
 		<div
-			id="messages"
-			class="flex-1 overflow-y-auto space-y-2 rounded-lg bg-white dark:bg-gray-800 p-4 shadow"
+			id={ ElementMessages }
+			class="flex-1 overflow-y-auto space-y-2 rounded-lg bg-white dark:bg-gray-800 p-4 shadow min-h-[200px] peer-checked:hidden"
 		></div>
-		<form id="chat-form" class="mt-4 flex gap-2">
-			<input
-				type="text"
-				name="message"
-				id="message-input"
-				autocomplete="off"
-				placeholder="Type a message..."
-				class="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-			/>
-			<button
-				type="submit"
-				class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-			>
-				Send
-			</button>
-		</form>
+		<!-- Input bar: hidden when settings is open -->
+		<div class="mt-4 flex items-end gap-2 peer-checked:hidden">
+			<form id={ ElementChatForm } class="flex flex-1 items-end gap-2" ws-send>
+				<input type="hidden" name="type" value="message"/>
+				<textarea
+					name="text"
+					id={ ElementMessageInput }
+					autocomplete="off"
+					rows="1"
+					placeholder="Type a message..."
+					class="flex-1 max-h-[50vh] resize-none overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+					oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+					onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit()}"
+				></textarea>
+				@SendButton(false)
+			</form>
+			<form ws-send>
+				<input type="hidden" name="type" value="leave"/>
+				<button
+					type="submit"
+					class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
+				>
+					Leave
+				</button>
+			</form>
+		</div>
 	</div>
+}
+
+// SendButton renders the Send button with an optional OOB swap.
+// When enabled is false, the button is disabled with reduced
+// opacity styling.
+templ SendButton(enabled bool) {
+	<button
+		id={ ElementSendButton }
+		type="submit"
+		hx-swap-oob="true"
+		disabled?={ !enabled }
+		if enabled {
+			class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+		} else {
+			class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm opacity-50 cursor-not-allowed"
+		}
+	>
+		Send
+	</button>
 }

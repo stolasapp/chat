@@ -1,8 +1,8 @@
+// Package ws provides WebSocket HTTP handlers and middleware.
 package ws
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -12,68 +12,95 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 
 	"github.com/stolasapp/chat/internal/hub"
+	"github.com/stolasapp/chat/internal/match"
+	"github.com/stolasapp/chat/internal/ratelimit"
 )
 
 const (
-	tokenBytes       = 8 // 64 bits per token
 	wsReadBufSize    = 1024
 	wsWriteBufSize   = 1024
+	ipRate           = rate.Limit(1)
+	ipBurst          = 5
 	rateLimitBackoff = 30 * time.Second
 )
 
-// NewHandler returns an http.Handler that upgrades connections to
-// WebSocket and registers them with the Hub. allowedOrigins
-// specifies which Origin header values are permitted. If empty,
-// the handler falls back to same-host checking (Origin host must
-// match the Host header).
-func NewHandler(wsHub *hub.Hub, limiter *IPLimiter, allowedOrigins []string) http.Handler {
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  wsReadBufSize,
-		WriteBufferSize: wsWriteBufSize,
-		CheckOrigin:     checkOrigin(allowedOrigins),
+// Handler upgrades HTTP connections to WebSocket and registers
+// them with the Hub. It manages its own per-IP rate limiter.
+type Handler struct {
+	hub      *hub.Hub
+	limiter  *ratelimit.Keyed[string]
+	upgrader websocket.Upgrader
+}
+
+// NewHandler creates a Handler. allowedOrigins specifies which
+// Origin header values are permitted. If empty, the handler falls
+// back to same-host checking (Origin host must match the Host
+// header).
+func NewHandler(wsHub *hub.Hub, allowedOrigins []string) *Handler {
+	return &Handler{
+		hub:     wsHub,
+		limiter: ratelimit.NewKeyed[string](ipRate, ipBurst),
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  wsReadBufSize,
+			WriteBufferSize: wsWriteBufSize,
+			CheckOrigin:     checkOrigin(allowedOrigins),
+		},
+	}
+}
+
+// Cleanup removes rate limiter entries idle longer than maxAge.
+func (h *Handler) Cleanup(maxAge time.Duration) {
+	h.limiter.Cleanup(maxAge)
+}
+
+func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	ipAddr := RealIP(request)
+
+	conn, err := h.upgrader.Upgrade(writer, request, nil)
+	if err != nil {
+		slog.Warn("ws upgrade failed", slog.Any("error", err))
+		return
 	}
 
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		ipAddr := RealIP(request)
-
-		conn, err := upgrader.Upgrade(writer, request, nil)
-		if err != nil {
-			slog.Warn("ws upgrade failed", "error", err)
-			return
-		}
-
-		if !limiter.Allow(ipAddr) {
-			if err := writeEnvelope(conn, &hub.RateLimitedMessage{
-				RetryAfter: rateLimitBackoff,
-			}); err != nil {
-				slog.Warn("failed to send rate limit message", "error", err)
-			}
-			closeConn(conn, websocket.ClosePolicyViolation, "rate limited")
-			return
-		}
-
-		token := generateToken()
-		refresh := generateToken()
-
-		client := hub.NewClient(wsHub, conn, token, refresh)
-
-		// send token before registering to avoid a race between
-		// Send writing to client.send and the hub receiving the
-		// client pointer from the register channel
-		if err := client.Send(request.Context(), hub.TokenMessage{
-			Token:   token,
-			Refresh: refresh,
+	if !h.limiter.Allow(ipAddr) {
+		if err := writeEnvelope(conn, &hub.RateLimitedMessage{
+			RetryAfter: rateLimitBackoff,
 		}); err != nil {
-			slog.Warn("failed to send token message", "error", err)
-			client.Close()
-			closeConn(conn, websocket.CloseInternalServerErr, "internal error")
-			return
+			slog.Warn("failed to send rate limit message", slog.Any("error", err))
 		}
+		closeConn(conn, websocket.ClosePolicyViolation, "rate limited")
+		return
+	}
 
-		wsHub.Register(client)
-	})
+	token := match.NewToken()
+	refresh := match.NewToken()
+
+	// detach from the request context so the client's lifetime
+	// extends beyond the HTTP handler return
+	connCtx := context.WithoutCancel(request.Context())
+	client := h.hub.NewClient(connCtx, conn, token, refresh)
+
+	// send token before registering to avoid a race between
+	// Send writing to client.send and the hub receiving the
+	// client pointer from the register channel
+	if err := client.Send(request.Context(), hub.TokenMessage{
+		Token:   token,
+		Refresh: refresh,
+	}); err != nil {
+		slog.Warn("failed to send token message", slog.Any("error", err))
+		client.Close(hub.ErrClientClosed)
+		closeConn(conn, websocket.CloseInternalServerErr, "internal error")
+		return
+	}
+
+	if err := h.hub.Register(request.Context(), client); err != nil {
+		slog.Warn("failed to register client", slog.Any("error", err))
+		client.Close(hub.ErrClientClosed)
+		return
+	}
 }
 
 // RealIP extracts the client IP from the request, checking
@@ -131,12 +158,6 @@ func checkOrigin(allowedOrigins []string) func(*http.Request) bool {
 	}
 }
 
-func generateToken() string {
-	var buf [tokenBytes]byte
-	_, _ = rand.Read(buf[:])
-	return hex.EncodeToString(buf[:])
-}
-
 // writeEnvelope marshals a Message and writes it to the connection
 // as a text frame. All gorilla WriteMessage errors are terminal:
 // once a write fails the connection's internal writeErr is latched
@@ -159,7 +180,7 @@ func writeEnvelope(conn *websocket.Conn, msg hub.Message) error {
 func closeConn(conn *websocket.Conn, code int, reason string) {
 	closeMsg := websocket.FormatCloseMessage(code, reason)
 	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-		slog.Warn("ws close handshake failed", "error", err)
+		slog.Warn("ws close handshake failed", slog.Any("error", err))
 	}
 	_ = conn.Close()
 }

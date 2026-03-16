@@ -1,0 +1,38 @@
+package view
+
+// ChatEnded renders a notification after a chat session ends.
+// When showActions is true, "Find Another" and "Block & Find
+// Another" buttons are shown. Appended to the messages area
+// via OOB swap.
+templ ChatEnded(message string, showActions bool) {
+	@appendMessage() {
+		<div class="mx-auto text-center space-y-3 py-4">
+			<p class="text-sm text-gray-500 dark:text-gray-400">{ message }</p>
+			if showActions {
+				<div class="flex items-center justify-center gap-2">
+					<form ws-send class="inline">
+						<input type="hidden" name="type" value="find_match"/>
+						<button
+							type="submit"
+							id={ ElementFindAnother }
+							class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+						>
+							Find Another
+						</button>
+					</form>
+					<form ws-send class="inline">
+						<input type="hidden" name="type" value="find_match"/>
+						<input type="hidden" name="block" value="true"/>
+						<button
+							type="submit"
+							id={ ElementBlockBtn }
+							class="rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500"
+						>
+							Block &amp; Find Another
+						</button>
+					</form>
+				</div>
+			}
+		</div>
+	}
+}

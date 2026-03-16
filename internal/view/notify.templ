@@ -1,10 +1,17 @@
 package view
 
-templ Notify(message string) {
-	<div
-		class="mx-auto text-center text-sm text-gray-500 dark:text-gray-400 py-2"
-		hx-swap-oob="beforeend:#messages"
-	>
-		{ message }
+// appendMessage wraps content in the OOB swap container that
+// appends to the #messages element.
+templ appendMessage() {
+	<div id={ ElementMessages } hx-swap-oob="beforeend">
+		{ children... }
 	</div>
+}
+
+templ Notify(message string) {
+	@appendMessage() {
+		<div class="mx-auto text-center text-sm text-gray-500 dark:text-gray-400 py-2">
+			{ message }
+		</div>
+	}
 }

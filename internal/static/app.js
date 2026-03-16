@@ -1,11 +1,142 @@
 "use strict";
 
-const STORAGE_KEY = "demographics";
+const STORAGE_KEY = "profile";
+
+// --- Initialization ---
 
 document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("demographics-form");
-  if (form === null) return;
+  const form = document.getElementById(IDs.profileForm);
+  if (form !== null) {
+    initForm(form);
+  }
+});
 
+// Re-initialize forms and UI after HTMX swaps new content in.
+document.addEventListener("htmx:oobAfterSwap", () => {
+  const form = document.getElementById(IDs.profileForm);
+  if (form !== null && !form.dataset.initialized) {
+    initForm(form);
+  }
+
+  const messages = document.getElementById(IDs.messages);
+  if (messages !== null) {
+    messages.scrollTop = messages.scrollHeight;
+  }
+});
+
+// --- Protocol message interception ---
+
+// Intercept incoming WS messages. JSON protocol messages (token,
+// rate_limited) are handled here and cancelled, so HTMX doesn't
+// try to swap them as HTML. HTML fragments pass through to HTMX.
+document.addEventListener("htmx:wsBeforeMessage", (event) => {
+  let env;
+  try {
+    env = JSON.parse(event.detail.message);
+  } catch {
+    return;
+  }
+
+  // cancel so HTMX doesn't try to swap JSON as HTML
+  event.preventDefault();
+
+  switch (env.type) {
+    case "token":
+      sessionStorage.setItem("session_token", env.payload.token);
+      sessionStorage.setItem("refresh_token", env.payload.refresh);
+      break;
+
+    case "rate_limited":
+      console.warn(
+        "rate limited, retry after",
+        env.payload.retry_after,
+        "s",
+      );
+      break;
+  }
+});
+
+// --- Outgoing message formatting ---
+
+// Intercept outgoing ws-send messages. The form data includes a
+// "type" hidden field. For find_match and block, merge in the
+// profile from the drawer form or sessionStorage.
+document.addEventListener("htmx:wsConfigSend", (event) => {
+  const params = event.detail.parameters;
+  const msgType = params.type;
+
+  if (msgType === "find_match") {
+    const profile = getProfile();
+    Object.assign(params, profile);
+  }
+
+  // confirm before leaving
+  if (msgType === "leave") {
+    if (!confirm("Are you sure you want to leave?")) {
+      event.preventDefault();
+      return;
+    }
+  }
+
+  // block empty chat messages
+  if (msgType === "message") {
+    const text = (params.text || "").trim();
+    if (text === "") {
+      event.preventDefault();
+      return;
+    }
+  }
+
+  // wrap as our JSON envelope format
+  const payload = Object.assign({}, params);
+  delete payload.type;
+  event.detail.messageBody = JSON.stringify({
+    type: msgType,
+    payload: payload,
+  });
+});
+
+// Clear chat input after a message is sent and refocus.
+document.addEventListener("htmx:wsAfterSend", (event) => {
+  const form = event.detail.elt;
+  if (form.id !== IDs.chatForm) return;
+  const input = document.getElementById(IDs.messageInput);
+  if (input !== null) {
+    input.value = "";
+    input.style.height = "auto";
+    input.focus();
+  }
+});
+
+// --- Helpers ---
+
+// getProfile reads the user's profile from the drawer form,
+// falling back to sessionStorage.
+function getProfile() {
+  const form = document.getElementById(IDs.profileForm);
+  if (form !== null) {
+    const data = readForm(form);
+    if (data.gender !== "") {
+      return data;
+    }
+  }
+  return readFromStorage();
+}
+
+function readFromStorage() {
+  const raw = sessionStorage.getItem(STORAGE_KEY);
+  if (raw === null) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+// --- Interest picker ---
+
+function initForm(form) {
+  form.dataset.initialized = "true";
   initInterestPickers(form);
   restoreForm(form);
 
@@ -14,18 +145,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updateFindButton(form);
   });
 
-  const btn = document.getElementById("find-match-btn");
-  if (btn !== null) {
-    btn.addEventListener("click", () => {
-      const data = readForm(form);
-      console.log("find_match", data);
-    });
-  }
-
   updateFindButton(form);
-});
-
-// --- Interest picker ---
+}
 
 function initInterestPickers(form) {
   form.querySelectorAll(".interest-picker").forEach(initPicker);
@@ -35,7 +156,6 @@ function initPicker(picker) {
   const search = picker.querySelector(".interest-search");
   const groups = picker.querySelectorAll(".interest-group");
 
-  // Search filtering
   search.addEventListener("input", () => {
     const query = search.value.toLowerCase().trim();
     groups.forEach((group) => {
@@ -50,7 +170,6 @@ function initPicker(picker) {
     });
   });
 
-  // Category collapse/expand
   picker.querySelectorAll(".interest-group-toggle").forEach((btn) => {
     btn.addEventListener("click", () => {
       const group = btn.closest(".interest-group");
@@ -62,7 +181,6 @@ function initPicker(picker) {
     });
   });
 
-  // Checkbox changes update tags
   picker.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
     cb.addEventListener("change", () => syncTags(picker));
   });
@@ -71,7 +189,6 @@ function initPicker(picker) {
 function syncTags(picker) {
   const container = picker.querySelector(".interest-tags");
 
-  // Remove existing tags
   while (container.firstChild) {
     container.removeChild(container.firstChild);
   }
@@ -80,7 +197,6 @@ function syncTags(picker) {
     'input[type="checkbox"]:checked',
   );
 
-  // Show/hide tags container
   if (checked.length === 0) {
     container.classList.add("hidden");
     container.classList.remove("flex");
@@ -113,7 +229,7 @@ function syncTags(picker) {
   });
 }
 
-// --- Form persistence ---
+// --- Form persistence (sessionStorage) ---
 
 function readForm(form) {
   const data = new FormData(form);
@@ -129,11 +245,11 @@ function readForm(form) {
 
 function saveForm(form) {
   const data = readForm(form);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 function restoreForm(form) {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = sessionStorage.getItem(STORAGE_KEY);
   if (raw === null) return;
 
   let data;
@@ -150,14 +266,13 @@ function restoreForm(form) {
   setCheckboxes(form, "filter_role", data.filter_role || []);
   setCheckboxes(form, "exclude_interests", data.exclude_interests || []);
 
-  // Sync tags after restoring checkbox state
   form.querySelectorAll(".interest-picker").forEach(syncTags);
 }
 
 function setSelect(form, name, value) {
   if (value === undefined) return;
-  const select = form.querySelector(`select[name="${name}"]`);
-  if (select !== null) select.value = value;
+  const el = form.querySelector(`select[name="${name}"]`);
+  if (el !== null) el.value = value;
 }
 
 function setCheckboxes(form, name, values) {
@@ -171,7 +286,7 @@ function setCheckboxes(form, name, values) {
 
 function updateFindButton(form) {
   const data = new FormData(form);
-  const btn = document.getElementById("find-match-btn");
+  const btn = document.getElementById(IDs.findMatchBtn);
   if (btn === null) return;
   btn.disabled = !data.get("gender") || !data.get("role");
 }

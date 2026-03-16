@@ -1,42 +1,49 @@
 package view
 
-import "strings"
-
 templ LandingPage() {
 	@Layout("Stolas Chat") {
-		<div class="min-h-full flex items-center justify-center p-4">
-			<div class="w-full max-w-md space-y-6">
-				<div class="text-center">
-					<h1 class="text-2xl font-bold">Stolas Chat</h1>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-						Anonymous matchmaking chat
-					</p>
-				</div>
-				<form id="demographics-form" class="space-y-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-					@aboutYouSection()
-					<hr class="border-gray-200 dark:border-gray-700"/>
-					@lookingForSection()
-					<button
-						type="button"
-						id="find-match-btn"
-						disabled
-						class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-					>
-						Find a Match
-					</button>
-				</form>
-			</div>
+		<div id="ws-container" hx-ext="ws" ws-connect="/ws" class="h-full">
+			@LandingContent()
 		</div>
 	}
+}
+
+// LandingContent renders the landing page inner content. Used
+// both for initial page load and for OOB swap when leaving chat.
+templ LandingContent() {
+	<div id={ ElementContent } hx-swap-oob="true" class="min-h-full flex items-center justify-center p-4">
+		<div class="w-full max-w-md space-y-6">
+			<div class="text-center">
+				<h1 class="text-2xl font-bold">Stolas Chat</h1>
+				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+					Anonymous matchmaking chat
+				</p>
+			</div>
+			<form id={ ElementProfileForm } ws-send class="space-y-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+				<input type="hidden" name="type" value="find_match"/>
+				@aboutYouSection()
+				<hr class="border-gray-200 dark:border-gray-700"/>
+				@lookingForSection()
+				<button
+					type="submit"
+					id={ ElementFindMatchBtn }
+					disabled
+					class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					Find a Match
+				</button>
+			</form>
+		</div>
+	</div>
 }
 
 templ aboutYouSection() {
 	<fieldset>
 		<legend class="text-lg font-semibold">About You</legend>
 		<div class="mt-4 space-y-4">
-			@selectGroup("gender", "Gender", Genders)
-			@selectGroup("role", "Role", Roles)
-			@interestPicker("interests", "Interests", InterestGroups)
+			@selectGroup("gender", "Gender", genderOpts)
+			@selectGroup("role", "Role", roleOpts)
+			@interestPicker("interests", "Interests", interestGroupOpts)
 		</div>
 	</fieldset>
 }
@@ -45,9 +52,9 @@ templ lookingForSection() {
 	<fieldset>
 		<legend class="text-lg font-semibold">Looking For</legend>
 		<div class="mt-4 space-y-4">
-			@optionCheckboxGroup("filter_gender", "Partner Gender", Genders)
-			@optionCheckboxGroup("filter_role", "Partner Role", Roles)
-			@interestPicker("exclude_interests", "Exclude Interests", InterestGroups)
+			@optionCheckboxGroup("filter_gender", "Partner Gender", genderOpts)
+			@optionCheckboxGroup("filter_role", "Partner Role", roleOpts)
+			@interestPicker("exclude_interests", "Exclude Interests", interestGroupOpts)
 		</div>
 	</fieldset>
 }
@@ -87,7 +94,7 @@ templ optionCheckboxGroup(name string, label string, options []selectOption) {
 	</div>
 }
 
-templ interestPicker(name string, label string, groups []InterestGroup) {
+templ interestPicker(name string, label string, groups []interestGroup) {
 	<div class="interest-picker" data-name={ name }>
 		<label class="block text-sm font-medium mb-1">{ label }</label>
 		<div class="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 overflow-hidden">
@@ -112,14 +119,14 @@ templ interestPicker(name string, label string, groups []InterestGroup) {
 						</button>
 						<div class="interest-group-items grid grid-cols-2 gap-1 pb-1">
 							for _, item := range group.Items {
-								<label class="interest-item inline-flex items-center gap-1.5 text-sm" data-value={ item }>
+								<label class="interest-item inline-flex items-center gap-1.5 text-sm" data-value={ item.Value }>
 									<input
 										type="checkbox"
 										name={ name }
-										value={ item }
+										value={ item.Value }
 										class="rounded text-indigo-600 focus:ring-indigo-500"
 									/>
-									{ strings.ToUpper(item[:1]) + item[1:] }
+									{ item.Label }
 								</label>
 							}
 						</div>
