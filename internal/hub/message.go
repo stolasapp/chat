@@ -18,6 +18,7 @@ const (
 	MessageTypeFindMatch   MessageType = "find_match"
 	MessageTypeLeave       MessageType = "leave"
 	MessageTypeMessage     MessageType = "message"
+	MessageTypeTyping      MessageType = "typing"
 	MessageTypeRateLimited MessageType = "rate_limited"
 )
 
@@ -58,6 +59,8 @@ func (e Envelope) Parse() (Message, error) {
 		return LeaveMessage{}, nil
 	case MessageTypeMessage:
 		return unmarshalPayload[ChatMessage](e.Payload)
+	case MessageTypeTyping:
+		return unmarshalPayload[TypingMessage](e.Payload)
 	case MessageTypeRateLimited:
 		return unmarshalPayload[RateLimitedMessage](e.Payload)
 	default:
@@ -114,13 +117,24 @@ type LeaveMessage struct{}
 func (LeaveMessage) MessageType() MessageType { return MessageTypeLeave }
 
 // ChatMessage is sent by the client to relay a text message
-// to their partner.
+// to their partner. Seq is a client-generated sequence number
+// used for optimistic UI confirmation.
 type ChatMessage struct {
 	Text string `json:"text"`
+	Seq  int    `json:"seq"`
 }
 
 // MessageType implements Message.
 func (ChatMessage) MessageType() MessageType { return MessageTypeMessage }
+
+// TypingMessage indicates whether the client is currently typing.
+// Relayed to the partner to show a typing indicator.
+type TypingMessage struct {
+	Active bool `json:"active"`
+}
+
+// MessageType implements Message.
+func (TypingMessage) MessageType() MessageType { return MessageTypeTyping }
 
 // RateLimitedMessage is sent when a client exceeds the connection
 // rate limit, indicating how long to wait before retrying.

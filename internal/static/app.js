@@ -1,6 +1,17 @@
 "use strict";
 
 const STORAGE_KEY = "profile";
+const CHAR_COUNT_THRESHOLD = 200;
+
+// message sequence counter for optimistic send confirmation
+let messageSeq = 0;
+
+// WebSocket reference for direct sends (typing indicators)
+let ws = null;
+
+// typing indicator debounce state
+let typingTimeout = null;
+let isTyping = false;
 
 // --- Initialization ---
 
@@ -22,17 +33,66 @@ document.addEventListener("htmx:oobAfterSwap", () => {
   if (messages !== null) {
     messages.scrollTop = messages.scrollHeight;
   }
+
+  const input = document.getElementById(IDs.messageInput);
+  if (input !== null && !input.dataset.typingBound) {
+    input.dataset.typingBound = "true";
+    input.addEventListener("input", onMessageInput);
+  }
 });
+
+// --- WebSocket lifecycle ---
+
+document.addEventListener("htmx:wsOpen", (event) => {
+  ws = event.detail.event.target;
+});
+
+document.addEventListener("htmx:wsClose", () => {
+  ws = null;
+  isTyping = false;
+  clearTimeout(typingTimeout);
+});
+
+// --- Typing indicator ---
+
+function onMessageInput() {
+  if (ws === null) return;
+
+  if (!isTyping) {
+    isTyping = true;
+    ws.send(JSON.stringify({ type: "typing", payload: { active: true } }));
+  }
+
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    isTyping = false;
+    if (ws !== null) {
+      ws.send(
+        JSON.stringify({ type: "typing", payload: { active: false } }),
+      );
+    }
+  }, 2000);
+}
+
+function stopTyping() {
+  if (!isTyping || ws === null) return;
+  isTyping = false;
+  clearTimeout(typingTimeout);
+  ws.send(JSON.stringify({ type: "typing", payload: { active: false } }));
+}
 
 // --- Protocol message interception ---
 
 // Intercept incoming WS messages. JSON protocol messages (token,
 // rate_limited) are handled here and cancelled, so HTMX doesn't
-// try to swap them as HTML. HTML fragments pass through to HTMX.
+// try to swap them as HTML. HTML with data-seq confirms optimistic
+// messages. Other HTML fragments pass through to HTMX.
 document.addEventListener("htmx:wsBeforeMessage", (event) => {
+  const raw = event.detail.message;
+
   let env;
   try {
-    env = JSON.parse(event.detail.message);
+    env = JSON.parse(raw);
   } catch {
     return;
   }
@@ -70,21 +130,31 @@ document.addEventListener("htmx:wsConfigSend", (event) => {
     Object.assign(params, profile);
   }
 
-  // confirm before leaving
-  if (msgType === "leave") {
-    if (!confirm("Are you sure you want to leave?")) {
-      event.preventDefault();
-      return;
-    }
-  }
-
-  // block empty chat messages
+  // optimistic message send
   if (msgType === "message") {
-    const text = (params.text || "").trim();
-    if (text === "") {
+    const sendBtn = document.getElementById(IDs.sendBtn);
+    if (sendBtn !== null && sendBtn.disabled) {
       event.preventDefault();
       return;
     }
+    const text = (params.text || "").trim();
+    if (text === "" || text.length > IDs.maxMessageLength) {
+      event.preventDefault();
+      return;
+    }
+    messageSeq++;
+    const seq = messageSeq;
+
+    // render optimistic preview immediately
+    stopTyping();
+    appendOptimisticMessage(text, seq);
+
+    // send with seq for server echo confirmation
+    event.detail.messageBody = JSON.stringify({
+      type: "message",
+      payload: { text: text, seq: seq },
+    });
+    return;
   }
 
   // wrap as our JSON envelope format
@@ -105,8 +175,54 @@ document.addEventListener("htmx:wsAfterSend", (event) => {
     input.value = "";
     input.style.height = "auto";
     input.focus();
+    updateCharCount(input);
   }
 });
+
+// --- Character count ---
+
+function updateCharCount(textarea) {
+  const counter = document.getElementById(IDs.charCount);
+  if (counter === null) return;
+  const remaining = IDs.maxMessageLength - textarea.value.length;
+  if (remaining <= CHAR_COUNT_THRESHOLD) {
+    counter.textContent = remaining;
+    counter.classList.remove("hidden");
+    if (remaining <= 50) {
+      counter.classList.add("text-red-500", "dark:text-red-400");
+      counter.classList.remove("text-gray-400", "dark:text-gray-500");
+    } else {
+      counter.classList.remove("text-red-500", "dark:text-red-400");
+      counter.classList.add("text-gray-400", "dark:text-gray-500");
+    }
+  } else {
+    counter.classList.add("hidden");
+  }
+}
+
+// --- Optimistic messages ---
+
+function appendOptimisticMessage(text, seq) {
+  // build a safe HTML string using a temporary element for
+  // textContent escaping, then let htmx handle the DOM insert.
+  // NOTE: base classes must match message.templ ChatMessage self
+  // branch (plus opacity-50 for pending state).
+  const tmp = document.createElement("span");
+  tmp.textContent = text;
+  const html =
+    '<div id="msg-' +
+    seq +
+    '" class="ml-auto max-w-[75%] break-words hyphens-auto rounded-lg ' +
+    'bg-indigo-600 px-3 py-2 text-sm text-white opacity-50">' +
+    tmp.innerHTML +
+    "</div>";
+  htmx.swap("#" + IDs.messages, html, { swapStyle: "beforeend" });
+  const msgs = document.getElementById(IDs.messages);
+  if (msgs !== null) {
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+}
+
 
 // --- Helpers ---
 

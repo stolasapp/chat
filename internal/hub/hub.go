@@ -1,8 +1,10 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +16,11 @@ import (
 )
 
 const shutdownTimeout = 10 * time.Second
+
+// excessiveNewlines matches 3 or more consecutive newlines
+// (with optional carriage returns). Used to clamp whitespace
+// in chat messages.
+var excessiveNewlines = regexp.MustCompile(`(\r?\n){3,}`)
 
 // clientMessage pairs a received envelope with the client that
 // sent it.
@@ -110,7 +117,13 @@ func (h *Hub) Run(ctx context.Context) {
 	h.clientWG.Wait()
 }
 
+const clientCountInterval = 10 * time.Second
+
 func (h *Hub) run(ctx context.Context, matcherCancel context.CancelFunc) {
+	countTicker := time.NewTicker(clientCountInterval)
+	defer countTicker.Stop()
+	countDirty := false
+
 	for {
 		select {
 		case client := <-h.register:
@@ -120,15 +133,23 @@ func (h *Hub) run(ctx context.Context, matcherCancel context.CancelFunc) {
 			count := len(h.clients)
 			h.mu.Unlock()
 			slog.Info("client registered", slog.Int("clients", count))
+			countDirty = true
 
 		case client := <-h.unregister:
 			h.handleUnregister(ctx, client)
+			countDirty = true
 
 		case msg := <-h.incoming:
 			h.dispatch(ctx, msg)
 
 		case result := <-h.matcher.Matched():
 			h.handleMatched(ctx, result)
+
+		case <-countTicker.C:
+			if countDirty {
+				h.broadcastClientCount(ctx)
+				countDirty = false
+			}
 
 		case <-ctx.Done():
 			shutdownCtx, cancel := context.WithTimeout(
@@ -138,6 +159,26 @@ func (h *Hub) run(ctx context.Context, matcherCancel context.CancelFunc) {
 			cancel()
 			return
 		}
+	}
+}
+
+func (h *Hub) broadcastClientCount(ctx context.Context) {
+	h.mu.RLock()
+	count := len(h.clients)
+	clients := make([]*Client, 0, count)
+	for client := range h.clients {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+
+	var buf bytes.Buffer
+	if err := view.ClientCount(count).Render(ctx, &buf); err != nil {
+		slog.Warn("failed to render client count", slog.Any("error", err))
+		return
+	}
+	data := buf.Bytes()
+	for _, client := range clients {
+		_ = client.SendRaw(ctx, data)
 	}
 }
 
@@ -164,7 +205,7 @@ func (h *Hub) handleUnregister(ctx context.Context, client *Client) {
 	slog.Info("client unregistered", slog.Int("clients", count))
 
 	if partnerClient != nil {
-		_ = partnerClient.SendComponent(ctx, view.SendButton(false), view.ChatEnded("Your partner has left.", true))
+		_ = partnerClient.SendComponent(ctx, view.SessionEndComponents("Your partner has left.", true)...)
 	}
 
 	if wasSearching {
@@ -184,6 +225,8 @@ func (h *Hub) dispatch(ctx context.Context, incoming clientMessage) {
 		h.handleFindMatch(ctx, incoming.client, msg)
 	case ChatMessage:
 		h.handleMessage(ctx, incoming.client, msg)
+	case TypingMessage:
+		h.handleTyping(ctx, incoming.client, msg)
 	case LeaveMessage:
 		h.handleLeave(ctx, incoming.client)
 	default:
@@ -195,6 +238,7 @@ func (h *Hub) handleFindMatch(ctx context.Context, client *Client, msg FindMatch
 	// if already in a session, ignore
 	h.mu.RLock()
 	_, inSession := h.sessions[client.token]
+	count := len(h.clients)
 	h.mu.RUnlock()
 	if inSession {
 		return
@@ -216,9 +260,11 @@ func (h *Hub) handleFindMatch(ctx context.Context, client *Client, msg FindMatch
 	}
 
 	client.profile = profile
-
-	// send a chat view with a searching notification
-	_ = client.SendComponent(ctx, view.ChatView(), view.Notify("Searching for a match..."))
+	_ = client.SendComponent(ctx,
+		view.ChatView(),
+		view.ClientCount(count),
+		view.Notify("Searching for a match..."),
+	)
 
 	attempt := h.matcher.Enqueue(ctx, client.token, profile)
 	if attempt == "" {
@@ -238,8 +284,8 @@ func (h *Hub) handleLeave(ctx context.Context, client *Client) {
 	h.mu.Unlock()
 
 	if partnerClient != nil {
-		_ = partnerClient.SendComponent(ctx, view.SendButton(false), view.ChatEnded("Your partner has left.", true))
-		_ = client.SendComponent(ctx, view.SendButton(false), view.ChatEnded("You left the chat.", true))
+		_ = partnerClient.SendComponent(ctx, view.SessionEndComponents("Your partner has left.", true)...)
+		_ = client.SendComponent(ctx, view.SessionEndComponents("You left the chat.", true)...)
 		return
 	}
 
@@ -253,24 +299,35 @@ func (h *Hub) handleMessage(ctx context.Context, client *Client, msg ChatMessage
 	if text == "" {
 		return
 	}
+	text = excessiveNewlines.ReplaceAllString(text, "\n\n")
 
-	h.mu.RLock()
-	session, inSession := h.sessions[client.token]
-	var partnerClient *Client
-	if inSession {
-		partner := session.Partner(client.token)
-		partnerClient = h.tokens[partner]
-	}
-	h.mu.RUnlock()
-
-	if !inSession {
+	partner := h.sessionPartner(client.token)
+	if partner == nil {
 		return
 	}
 
-	_ = client.SendComponent(ctx, view.ChatMessage(text, true))
-	if partnerClient != nil {
-		_ = partnerClient.SendComponent(ctx, view.ChatMessage(text, false))
+	_ = client.SendComponent(ctx, view.ChatMessage(text, true, msg.Seq))
+	_ = partner.SendComponent(ctx, view.TypingIndicator(false), view.ChatMessage(text, false, 0))
+}
+
+func (h *Hub) handleTyping(ctx context.Context, client *Client, msg TypingMessage) {
+	partner := h.sessionPartner(client.token)
+	if partner == nil {
+		return
 	}
+	_ = partner.SendComponent(ctx, view.TypingIndicator(msg.Active))
+}
+
+// sessionPartner returns the partner's Client for the given
+// token, or nil if not in a session or the partner is gone.
+func (h *Hub) sessionPartner(token match.Token) *Client {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	session, ok := h.sessions[token]
+	if !ok {
+		return nil
+	}
+	return h.tokens[session.Partner(token)]
 }
 
 // endSession tears down the session for the given token and
@@ -331,8 +388,10 @@ func (h *Hub) handleMatched(ctx context.Context, result match.Result) {
 	clientB.lastPartner = result.A.Token
 	h.mu.Unlock()
 
-	_ = clientA.SendComponent(ctx, view.Notify("You have been matched!"), view.SendButton(true))
-	_ = clientB.SendComponent(ctx, view.Notify("You have been matched!"), view.SendButton(true))
+	profileForA := view.NewMatchedProfile(clientB.profile, clientA.profile.Interests)
+	profileForB := view.NewMatchedProfile(clientA.profile, clientB.profile.Interests)
+	_ = clientA.SendComponent(ctx, view.MatchedNotify(profileForA), view.SendButton(true))
+	_ = clientB.SendComponent(ctx, view.MatchedNotify(profileForB), view.SendButton(true))
 }
 
 func (h *Hub) shutdown(ctx context.Context, matcherCancel context.CancelFunc) {
@@ -359,10 +418,7 @@ func (h *Hub) shutdown(ctx context.Context, matcherCancel context.CancelFunc) {
 	var closeWG sync.WaitGroup
 	for _, client := range clients {
 		closeWG.Go(func() {
-			_ = client.SendComponent(ctx,
-				view.SendButton(false),
-				view.ChatEnded("Server is shutting down.", true),
-			)
+			_ = client.SendComponent(ctx, view.SessionEndComponents("Server is shutting down.", true)...)
 			client.Close(ErrClientClosed)
 			client.Wait(ctx)
 		})

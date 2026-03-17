@@ -1,15 +1,27 @@
 package view
 
-templ ChatMessage(text string, self bool) {
-	@appendMessage() {
-		<div
-			if self {
-				class="ml-auto max-w-[75%] break-words rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white"
-			} else {
-				class="mr-auto max-w-[75%] break-words rounded-lg bg-gray-200 dark:bg-gray-700 px-3 py-2 text-sm"
-			}
-		>
-			{ text }
-		</div>
+import "fmt"
+
+// ChatMessage renders a message bubble. For self messages with
+// seq > 0, the optimistic placeholder is deleted via OOB and
+// the final message is appended at the bottom (correct order
+// even if partner messages arrived before the echo). Partner
+// messages always append.
+templ ChatMessage(text string, self bool, seq int) {
+	if self && seq > 0 {
+		<div id={ fmt.Sprintf("msg-%d", seq) } hx-swap-oob="delete"></div>
+	}
+	if self {
+		@appendMessage() {
+			<div class="ml-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">
+				@linkifyMessage(text, self)
+			</div>
+		}
+	} else {
+		@appendMessage() {
+			<div class="mr-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-gray-200 dark:bg-gray-700 px-3 py-2 text-sm">
+				@linkifyMessage(text, self)
+			</div>
+		}
 	}
 }

@@ -21,20 +21,29 @@ const (
 	ElementFindMatchBtn = "find-match-btn"
 	ElementFindAnother  = "find-another-btn"
 	ElementBlockBtn     = "block-btn"
+	ElementClientCount  = "client-count"
+	ElementTyping       = "typing-indicator"
+	ElementCharCount    = "char-count"
+
+	// MaxMessageLength is the maximum allowed chat message length
+	// in characters. Shared with JS via window.IDs.
+	MaxMessageLength = 2000
 )
 
 // elementIDs returns a templ component that emits a script block
 // attaching the element ID constants to window.IDs.
 func elementIDs() templ.Component {
 	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
-		ids := map[string]string{
-			"content":      ElementContent,
-			"messages":     ElementMessages,
-			"sendBtn":      ElementSendButton,
-			"profileForm":  ElementProfileForm,
-			"chatForm":     ElementChatForm,
-			"messageInput": ElementMessageInput,
-			"findMatchBtn": ElementFindMatchBtn,
+		ids := map[string]any{
+			"content":          ElementContent,
+			"messages":         ElementMessages,
+			"sendBtn":          ElementSendButton,
+			"profileForm":      ElementProfileForm,
+			"chatForm":         ElementChatForm,
+			"messageInput":     ElementMessageInput,
+			"findMatchBtn":     ElementFindMatchBtn,
+			"charCount":        ElementCharCount,
+			"maxMessageLength": MaxMessageLength,
 		}
 		data, err := json.Marshal(ids)
 		if err != nil {

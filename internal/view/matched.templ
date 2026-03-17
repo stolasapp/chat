@@ -1,0 +1,45 @@
+package view
+
+import "github.com/stolasapp/chat/internal/catalog"
+
+// MatchedNotify renders the match notification with partner
+// profile info. Common interests (shared with the user) are
+// displayed first in bold.
+templ MatchedNotify(partner MatchedProfile) {
+	@appendMessage() {
+		<div class="mx-auto text-center text-sm text-gray-500 dark:text-gray-400 py-3 space-y-1">
+			<p>
+				You have been matched with
+				a <span class="font-semibold text-gray-700 dark:text-gray-200">{ partner.Role }</span>
+				{ " " }
+				<span class="font-semibold text-gray-700 dark:text-gray-200">{ partner.Gender }</span>.
+			</p>
+			if len(partner.Common) > 0 || len(partner.Other) > 0 {
+				<p>
+					Their interests:
+					for idx, interest := range partner.Common {
+						<span class="font-bold text-indigo-600 dark:text-indigo-400">{ interest.Label() }</span>
+						if idx < len(partner.Common) - 1 || len(partner.Other) > 0 {
+							{ ", " }
+						}
+					}
+					for idx, interest := range partner.Other {
+						{ interest.Label() }
+						if idx < len(partner.Other) - 1 {
+							{ ", " }
+						}
+					}
+				</p>
+			}
+		</div>
+	}
+}
+
+// MatchedProfile holds the data needed to render the match
+// notification. Built by NewMatchedProfile.
+type MatchedProfile struct {
+	Gender string
+	Role   string
+	Common []catalog.Interest
+	Other  []catalog.Interest
+}

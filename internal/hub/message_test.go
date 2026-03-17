@@ -75,6 +75,11 @@ func TestMarshalMessage_AllTypes(t *testing.T) {
 			expectedType: MessageTypeMessage,
 		},
 		{
+			name:         "typing",
+			msg:          TypingMessage{Active: true},
+			expectedType: MessageTypeTyping,
+		},
+		{
 			name:         "rate_limited",
 			msg:          &RateLimitedMessage{RetryAfter: time.Second},
 			expectedType: MessageTypeRateLimited,
@@ -149,6 +154,13 @@ func TestEnvelope_Parse(t *testing.T) {
 		{
 			name: "valid leave",
 			env:  Envelope{Type: MessageTypeLeave},
+		},
+		{
+			name: "valid typing",
+			env: Envelope{
+				Type:    MessageTypeTyping,
+				Payload: json.RawMessage(`{"active":true}`),
+			},
 		},
 		{
 			name: "valid find_match with block",

@@ -24,10 +24,10 @@ const (
 	maxMessageSize = 4096
 	sendBufSize    = 256
 
-	// per-client message rate limit: 0.5 messages/sec with a
-	// burst of 5, allowing ~30 messages/min sustained.
-	clientRate  rate.Limit = 0.5
-	clientBurst int        = 5
+	// per-client byte rate limit: 2 KB/s sustained with an 8 KB
+	// burst, controlling total throughput rather than message count.
+	clientByteRate  rate.Limit = 2048
+	clientByteBurst int        = 8192
 )
 
 // ErrClientClosed is returned by Send methods when the client has
@@ -72,7 +72,7 @@ func (h *Hub) NewClient(ctx context.Context, conn *websocket.Conn, token, refres
 		done:         make(chan struct{}),
 		token:        token,
 		refreshToken: refreshToken,
-		limiter:      rate.NewLimiter(clientRate, clientBurst),
+		limiter:      rate.NewLimiter(clientByteRate, clientByteBurst),
 	}
 	h.clientWG.Go(client.writePump)
 	go client.readPump()
@@ -177,7 +177,7 @@ func (c *Client) readPump() {
 			return
 		}
 
-		if !c.limiter.Allow() {
+		if !c.limiter.AllowN(time.Now(), len(msg)) {
 			_ = c.SendComponent(c.ctx, view.Notify("Slow down, you are sending too fast."))
 			continue
 		}

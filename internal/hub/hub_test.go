@@ -447,10 +447,14 @@ func TestHub_MessageRateLimit(t *testing.T) {
 	defer func() { _ = connA.Close() }()
 	defer func() { _ = connB.Close() }()
 
-	// exhaust burst (5) plus extras to trigger rate limit
-	for idx := range 7 {
+	// exhaust byte burst (8192) by sending messages with large
+	// payloads. each message is ~3100 bytes on the wire, so 4
+	// messages (~12 KB) well exceeds the 8 KB burst even if
+	// some tokens refill between sends (2 KB/s).
+	bigText := strings.Repeat("x", 3000)
+	for range 4 {
 		sendJSON(t, connA, MessageTypeMessage, map[string]any{
-			"text": fmt.Sprintf("msg-%d", idx),
+			"text": bigText,
 		})
 	}
 
