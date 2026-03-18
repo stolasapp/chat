@@ -21,6 +21,9 @@ const (
 	shutdownTimeout             = 10 * time.Second
 	defaultGracePeriod          = 15 * time.Second
 	defaultReconnectNotifyDelay = 2 * time.Second
+	defaultIdleTimeout          = 5 * time.Minute
+	defaultIdleWarning          = 30 * time.Second
+	defaultSearchCooldown       = 2 * time.Second
 )
 
 // excessiveNewlines matches 3 or more consecutive newlines
@@ -60,6 +63,9 @@ type Hub struct {
 	unregister   chan *Client
 	incoming     chan clientMessage
 	graceExpired chan match.Token
+	idle         map[match.Token]*idleState
+	idleWarning  chan match.Token
+	idleDisconn  chan match.Token
 	matcher      *match.Matcher
 	mu           sync.RWMutex
 	running      atomic.Bool
@@ -74,6 +80,21 @@ type Hub struct {
 	// the "reconnecting" indicator to the partner. Defaults to 2s.
 	// Set before calling Run; read-only thereafter.
 	ReconnectNotifyDelay time.Duration // +checklocksignore: read-only after init
+
+	// IdleTimeout is how long a client can be idle in a session
+	// before being disconnected. Defaults to 5m. Set before
+	// calling Run; read-only thereafter.
+	IdleTimeout time.Duration // +checklocksignore: read-only after init
+
+	// IdleWarning is the duration of the warning period before
+	// idle disconnect. Defaults to 30s. Set before calling Run;
+	// read-only thereafter.
+	IdleWarning time.Duration // +checklocksignore: read-only after init
+
+	// SearchCooldown is the minimum time between find_match
+	// requests. Defaults to 2s. Set before calling Run;
+	// read-only thereafter.
+	SearchCooldown time.Duration // +checklocksignore: read-only after init
 }
 
 // NewHub creates a Hub ready to Run.
@@ -87,9 +108,15 @@ func NewHub(matcher *match.Matcher) *Hub {
 		unregister:           make(chan *Client, sendBufSize),
 		incoming:             make(chan clientMessage, sendBufSize),
 		graceExpired:         make(chan match.Token, sendBufSize),
+		idle:                 make(map[match.Token]*idleState),
+		idleWarning:          make(chan match.Token, sendBufSize),
+		idleDisconn:          make(chan match.Token, sendBufSize),
 		matcher:              matcher,
 		GracePeriod:          defaultGracePeriod,
 		ReconnectNotifyDelay: defaultReconnectNotifyDelay,
+		IdleTimeout:          defaultIdleTimeout,
+		IdleWarning:          defaultIdleWarning,
+		SearchCooldown:       defaultSearchCooldown,
 	}
 }
 
@@ -180,6 +207,12 @@ func (h *Hub) run(ctx context.Context, matcherCancel context.CancelFunc) {
 		case result := <-h.matcher.Matched():
 			h.handleMatched(ctx, result)
 
+		case token := <-h.idleWarning:
+			h.handleIdleWarning(ctx, token)
+
+		case token := <-h.idleDisconn:
+			h.handleIdleDisconnect(ctx, token)
+
 		case <-countTicker.C:
 			if countDirty {
 				h.broadcastClientCount(ctx)
@@ -234,6 +267,7 @@ func (h *Hub) handleUnregister(ctx context.Context, client *Client) {
 	if inSession || wasSearching {
 		// detach: preserve session and queue position for
 		// reconnection within the grace period
+		h.stopIdleTimer(client.token)
 		delete(h.tokens, client.token)
 		entry := &detachedClient{
 			token:       client.token,
@@ -321,6 +355,13 @@ func (h *Hub) handleRegister(ctx context.Context, client *Client) {
 		return
 	}
 	_ = client.Send(ctx, TokenMessage{Token: client.token})
+	// if the client sent a reconnect token that didn't match
+	// (e.g. server restarted), show the reset message with
+	// action buttons so the client can re-queue from whatever
+	// stale UI state they were in
+	if client.reconnectToken != "" {
+		_ = client.SendComponent(ctx, view.SessionEndComponents(view.MsgServerReset, true)...)
+	}
 	slog.Info("client registered", slog.Int("clients", state.count))
 }
 
@@ -397,6 +438,7 @@ func (h *Hub) transferIdentity(
 func (h *Hub) sendReconnectRecovery(ctx context.Context, client *Client, state reconnectState) {
 	_ = client.Send(ctx, TokenMessage{Token: client.token})
 	if state.inSession {
+		h.startIdleTimer(client.token)
 		components := []templ.Component{
 			view.ChatView(),
 			view.ClientCount(state.count),
@@ -441,7 +483,7 @@ func (h *Hub) handleGraceExpired(ctx context.Context, token match.Token) {
 	h.mu.Unlock()
 
 	if partnerClient != nil {
-		_ = partnerClient.SendComponent(ctx, view.SessionEndComponents("Your partner has left.", true)...)
+		_ = partnerClient.SendComponent(ctx, view.SessionEndComponents(view.MsgPartnerLeft, true)...)
 	}
 
 	if entry.attempt != "" {
@@ -482,6 +524,12 @@ func (h *Hub) handleFindMatch(ctx context.Context, client *Client, msg FindMatch
 		return
 	}
 
+	// search cooldown
+	if !client.lastSearchAt.IsZero() && time.Since(client.lastSearchAt) < h.SearchCooldown {
+		_ = client.SendComponent(ctx, view.Notify(view.MsgCooldown))
+		return
+	}
+
 	profile := &msg.Profile
 
 	// preserve block list from previous profile if any
@@ -506,11 +554,12 @@ func (h *Hub) handleFindMatch(ctx context.Context, client *Client, msg FindMatch
 
 	attempt := h.matcher.Enqueue(ctx, client.token, profile)
 	if attempt == "" {
-		// context was cancelled before the entry was accepted
+		// context was canceled before the entry was accepted
 		_ = client.SendComponent(ctx, view.LandingContent())
 		return
 	}
 	client.attempt = attempt
+	client.lastSearchAt = time.Now()
 }
 
 func (h *Hub) handleLeave(ctx context.Context, client *Client) {
@@ -521,9 +570,12 @@ func (h *Hub) handleLeave(ctx context.Context, client *Client) {
 	partnerClient := h.endSession(client.token)
 	h.mu.Unlock()
 
+	// cooldown on leave to prevent rapid leave+search cycles
+	client.lastSearchAt = time.Now()
+
 	if partnerClient != nil {
-		_ = partnerClient.SendComponent(ctx, view.SessionEndComponents("Your partner has left.", true)...)
-		_ = client.SendComponent(ctx, view.SessionEndComponents("You left the chat.", true)...)
+		_ = partnerClient.SendComponent(ctx, view.SessionEndComponents(view.MsgPartnerLeft, true)...)
+		_ = client.SendComponent(ctx, view.SessionEndComponents(view.MsgYouLeft, true)...)
 		return
 	}
 
@@ -544,6 +596,8 @@ func (h *Hub) handleMessage(ctx context.Context, client *Client, msg ChatMessage
 		return
 	}
 
+	h.resetIdleTimer(client.token)
+
 	_ = client.SendComponent(ctx, view.ChatMessage(text, true, msg.Seq))
 	_ = partner.SendComponent(ctx, view.TypingIndicator(false), view.ChatMessage(text, false, 0))
 }
@@ -553,6 +607,7 @@ func (h *Hub) handleTyping(ctx context.Context, client *Client, msg TypingMessag
 	if partner == nil {
 		return
 	}
+	h.resetIdleTimer(client.token)
 	_ = partner.SendComponent(ctx, view.TypingIndicator(msg.Active))
 }
 
@@ -578,11 +633,13 @@ func (h *Hub) endSession(token match.Token) *Client {
 	if !ok {
 		return nil
 	}
+	h.stopIdleTimer(token)
 	partner := session.Partner(token)
 	delete(h.sessions, token)
 	if partner == "" {
 		return nil
 	}
+	h.stopIdleTimer(partner)
 	delete(h.sessions, partner)
 	partnerClient, ok := h.tokens[partner]
 	if !ok {
@@ -626,6 +683,9 @@ func (h *Hub) handleMatched(ctx context.Context, result match.Result) {
 	clientB.lastPartner = result.A.Token
 	h.mu.Unlock()
 
+	h.startIdleTimer(result.A.Token)
+	h.startIdleTimer(result.B.Token)
+
 	profileForA := view.NewMatchedProfile(clientB.profile, clientA.profile.Interests)
 	profileForB := view.NewMatchedProfile(clientA.profile, clientB.profile.Interests)
 	_ = clientA.SendComponent(ctx, view.MatchedNotify(profileForA), view.SendButton(true))
@@ -641,7 +701,12 @@ func (h *Hub) shutdown(ctx context.Context, matcherCancel context.CancelFunc) {
 	//    don't block after Run exits
 	h.drainChannels()
 
-	// 3. cancel all detached timers and end their sessions
+	// 3. stop all idle timers
+	for token := range h.idle {
+		h.stopIdleTimer(token)
+	}
+
+	// 4. cancel all detached timers and end their sessions
 	h.mu.Lock()
 	for token, entry := range h.detached {
 		entry.graceTimer.Stop()
@@ -652,7 +717,7 @@ func (h *Hub) shutdown(ctx context.Context, matcherCancel context.CancelFunc) {
 		delete(h.detached, token)
 	}
 
-	// 4. collect all clients and clear maps under lock
+	// 5. collect all clients and clear maps under lock
 	clients := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
 		clients = append(clients, client)
@@ -661,12 +726,12 @@ func (h *Hub) shutdown(ctx context.Context, matcherCancel context.CancelFunc) {
 	}
 	h.mu.Unlock()
 
-	// 5. notify and close all clients concurrently, waiting
+	// 6. notify and close all clients concurrently, waiting
 	//    for each write pump to drain
 	var closeWG sync.WaitGroup
 	for _, client := range clients {
 		closeWG.Go(func() {
-			_ = client.SendComponent(ctx, view.SessionEndComponents("Server is shutting down.", true)...)
+			_ = client.SendComponent(ctx, view.SessionEndComponents(view.MsgServerReset, true)...)
 			client.Close(ErrClientClosed)
 			client.Wait(ctx)
 		})

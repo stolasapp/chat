@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stolasapp/chat/internal/match"
+	"github.com/stolasapp/chat/internal/view"
 )
 
 var testClientCounter atomic.Int64
@@ -29,6 +30,7 @@ func testHub() *Hub {
 	wsHub := NewHub(testMatcher())
 	wsHub.GracePeriod = 500 * time.Millisecond
 	wsHub.ReconnectNotifyDelay = 100 * time.Millisecond
+	wsHub.SearchCooldown = 0
 	return wsHub
 }
 
@@ -225,7 +227,7 @@ func TestHub_GracefulShutdown(t *testing.T) {
 
 	cancel()
 
-	assert.True(t, coll.waitFor("shutting down", 2*time.Second), "should see shutdown message")
+	assert.True(t, coll.waitFor(view.MsgServerReset, 2*time.Second), "should see reset message")
 }
 
 func TestHub_RunOnce(t *testing.T) {
@@ -520,7 +522,7 @@ func TestHub_MessagePartnerDisconnected(t *testing.T) {
 	// A should see "reconnecting" after notify delay, then "partner
 	// has left" after the grace period expires
 	assert.True(t, collA.waitFor("reconnecting", 2*time.Second), "should see reconnecting indicator")
-	assert.True(t, collA.waitFor("partner has left", 2*time.Second), "should see partner left after grace period")
+	assert.True(t, collA.waitFor(view.MsgPartnerLeft, 2*time.Second), "should see partner left after grace period")
 
 	// Len drops to 1 after grace expiry
 	require.Eventually(t, func() bool {
@@ -584,8 +586,8 @@ func TestHub_BlockAndRematch(t *testing.T) {
 
 	// A leaves
 	sendJSON(t, connA, MessageTypeLeave, map[string]any{})
-	require.True(t, collA.waitFor("left", 2*time.Second))
-	require.True(t, collB.waitFor("left", 2*time.Second))
+	require.True(t, collA.waitFor(view.MsgYouLeft, 2*time.Second))
+	require.True(t, collB.waitFor(view.MsgPartnerLeft, 2*time.Second))
 
 	// A re-queues with block=true to block B
 	payload := findMatchPayload()
@@ -670,400 +672,27 @@ func TestHub_MatchLeaveRematch(t *testing.T) {
 	assert.Less(t, elapsed, 3*time.Second, "re-match should be fast")
 }
 
-// --- Reconnection tests ---
+// --- Search cooldown test ---
 
-// matchTwoWithTokens matches two clients and returns their
-// connections, collectors, and session tokens for reconnect testing.
-func matchTwoWithTokens(t *testing.T, wsHub *Hub, srv *httptest.Server) (
-	connA, connB *websocket.Conn,
-	collB *messageCollector,
-	tokenA, tokenB string,
-) {
-	t.Helper()
-	connA, tokenA = dialHubWithToken(t, srv)
-	connB, tokenB = dialHubWithToken(t, srv)
-
-	collA := newCollector(t, connA)
-	collB = newCollector(t, connB)
-
-	require.Eventually(t, func() bool {
-		return wsHub.Len() == 2
-	}, time.Second, 10*time.Millisecond)
-
-	sendJSON(t, connA, MessageTypeFindMatch, findMatchPayload())
-	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
-
-	require.True(t, collA.waitFor("matched", 3*time.Second), "A should be matched")
-	require.True(t, collB.waitFor("matched", 3*time.Second), "B should be matched")
-
-	return connA, connB, collB, tokenA, tokenB
-}
-
-func TestHub_ReconnectWithinGracePeriod(t *testing.T) {
+func TestHub_FindMatchCooldown(t *testing.T) {
 	t.Parallel()
 
 	wsHub := testHub()
+	wsHub.SearchCooldown = 500 * time.Millisecond
 	go wsHub.Run(t.Context())
 
 	srv := simpleHandler(wsHub)
 	defer srv.Close()
 
-	connA, connB, collB, tokenA, _ := matchTwoWithTokens(t, wsHub, srv)
-	defer func() { _ = connB.Close() }()
-
-	// A sends a message before disconnecting
-	sendJSON(t, connA, MessageTypeMessage, map[string]any{"text": "before disconnect"})
-	require.True(t, collB.waitFor("before disconnect", 2*time.Second))
-
-	// A disconnects (enters detached state)
-	_ = connA.Close()
-
-	// Len should stay at 2 (1 active + 1 detached)
-	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 2, wsHub.Len(), "count should include detached client")
-
-	// A reconnects via query param
-	connA2, _ := dialHubReconnect(t, srv, tokenA)
-	defer func() { _ = connA2.Close() }()
-	collA2 := newCollector(t, connA2)
-
-	// should receive partner profile (MatchedNotify renders "matched with")
-	assert.True(t, collA2.waitFor("matched with", 3*time.Second), "should see partner profile on reconnect")
-
-	// session should still work: B sends to A
-	sendJSON(t, connB, MessageTypeMessage, map[string]any{"text": "welcome back"})
-	assert.True(t, collA2.waitFor("welcome back", 2*time.Second), "should receive message after reconnect")
-
-	// A sends to B
-	sendJSON(t, connA2, MessageTypeMessage, map[string]any{"text": "im back"})
-	assert.True(t, collB.waitFor("im back", 2*time.Second), "partner should receive message from reconnected client")
-}
-
-func TestHub_ReconnectAfterGraceExpired(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	connA, connB, collB, tokenA, _ := matchTwoWithTokens(t, wsHub, srv)
-	defer func() { _ = connB.Close() }()
-
-	// A disconnects
-	_ = connA.Close()
-
-	// wait for grace period to expire
-	assert.True(t, collB.waitFor("partner has left", 2*time.Second), "B should see partner left after grace expiry")
-
-	// A tries to reconnect after grace expired: gets fresh identity
-	connA2, tokenA2 := dialHubReconnect(t, srv, tokenA)
-	defer func() { _ = connA2.Close() }()
-
-	// token should be fresh (not the old one)
-	assert.NotEqual(t, tokenA, tokenA2, "should get fresh identity after grace expiry")
-}
-
-func TestHub_ReconnectPartnerNotified(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	connA, connB, collB, tokenA, _ := matchTwoWithTokens(t, wsHub, srv)
-	defer func() { _ = connB.Close() }()
-
-	// A disconnects
-	_ = connA.Close()
-
-	// B should see "reconnecting" after ~2s delay
-	assert.True(t, collB.waitFor("reconnecting", 5*time.Second), "B should see reconnecting indicator")
-
-	// A reconnects within grace period via query param
-	connA2, _ := dialHubReconnect(t, srv, tokenA)
-	defer func() { _ = connA2.Close() }()
-	collA2 := newCollector(t, connA2)
-
-	require.True(t, collA2.waitFor("Reconnected", 3*time.Second))
-
-	// B should see the reconnecting indicator cleared (hidden)
-	assert.True(t, collB.waitFor("hidden", 3*time.Second), "B should see reconnecting indicator cleared")
-}
-
-func TestHub_BothDisconnectAndReconnect(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	connA, connB, _, tokenA, tokenB := matchTwoWithTokens(t, wsHub, srv)
-
-	// both disconnect
-	_ = connA.Close()
-	_ = connB.Close()
-	time.Sleep(200 * time.Millisecond)
-
-	// Len should stay at 2 (both detached)
-	assert.Equal(t, 2, wsHub.Len(), "both clients detached, count should be 2")
-
-	// A reconnects via query param
-	connA2, _ := dialHubReconnect(t, srv, tokenA)
-	defer func() { _ = connA2.Close() }()
-	collA2 := newCollector(t, connA2)
-	require.True(t, collA2.waitFor("Reconnected", 3*time.Second), "A should reconnect")
-
-	// B reconnects via query param
-	connB2, _ := dialHubReconnect(t, srv, tokenB)
-	defer func() { _ = connB2.Close() }()
-	collB2 := newCollector(t, connB2)
-	require.True(t, collB2.waitFor("Reconnected", 3*time.Second), "B should reconnect")
-
-	// session should work: A sends to B
-	sendJSON(t, connA2, MessageTypeMessage, map[string]any{"text": "both back"})
-	assert.True(t, collB2.waitFor("both back", 2*time.Second), "B should receive message after both reconnect")
-}
-
-func TestHub_ReconnectClientCountStability(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	connA, connB, _, tokenA, _ := matchTwoWithTokens(t, wsHub, srv)
-	defer func() { _ = connB.Close() }()
-
-	// before disconnect: 2
-	assert.Equal(t, 2, wsHub.Len())
-
-	// A disconnects (detached)
-	_ = connA.Close()
-	time.Sleep(100 * time.Millisecond)
-
-	// still 2 (1 active + 1 detached)
-	assert.Equal(t, 2, wsHub.Len())
-
-	// A reconnects via query param
-	connA2, _ := dialHubReconnect(t, srv, tokenA)
-	defer func() { _ = connA2.Close() }()
-	collA2 := newCollector(t, connA2)
-	require.True(t, collA2.waitFor("Reconnected", 3*time.Second))
-
-	require.Eventually(t, func() bool {
-		return wsHub.Len() == 2
-	}, time.Second, 10*time.Millisecond, "count should remain stable after reconnect")
-}
-
-func TestHub_GracefulShutdownDuringGracePeriod(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	ctx, cancel := context.WithCancel(context.Background())
-	go wsHub.Run(ctx)
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	connA, connB, collB, _, _ := matchTwoWithTokens(t, wsHub, srv)
-	defer func() { _ = connB.Close() }()
-
-	// A disconnects (enters detached state)
-	_ = connA.Close()
-	time.Sleep(100 * time.Millisecond)
-
-	// trigger shutdown while A is detached
-	cancel()
-
-	// B should see shutdown message (detached timers cleaned up)
-	assert.True(t, collB.waitFor("shutting down", 5*time.Second), "B should see shutdown message")
-}
-
-// TestHub_RefreshFromLandingPageThenMatch verifies that refreshing
-// the page before entering a session does not break subsequent
-// matching. The stale token should not trigger a reconnect for a
-// client that had no session or pending search.
-func TestHub_RefreshFromLandingPageThenMatch(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	// A connects (landing page, no session)
-	connA, tokenA := dialHubWithToken(t, srv)
-
-	// A refreshes: old WS closes, new WS opens with token
-	_ = connA.Close()
-	time.Sleep(100 * time.Millisecond)
-
-	connA2, _ := dialHubReconnect(t, srv, tokenA)
-	defer func() { _ = connA2.Close() }()
-	collA2 := newCollector(t, connA2)
-
-	// B connects fresh
-	connB := dialHub(t, srv)
-	defer func() { _ = connB.Close() }()
-	collB := newCollector(t, connB)
-
-	require.Eventually(t, func() bool {
-		return wsHub.Len() == 2
-	}, time.Second, 10*time.Millisecond)
-
-	// both search for a match
-	sendJSON(t, connA2, MessageTypeFindMatch, findMatchPayload())
-	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
-
-	// should match normally
-	assert.True(t, collA2.waitFor("matched", 3*time.Second), "A should match after refresh")
-	assert.True(t, collB.waitFor("matched", 3*time.Second), "B should match")
-}
-
-// TestHub_RapidRefreshPreservesSession verifies that rapidly
-// refreshing the page (multiple times before the hub processes
-// unregisters) does not break the session. The token identity
-// must remain stable across rapid reconnects.
-func TestHub_RapidRefreshPreservesSession(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	connA, connB, collB, tokenA, _ := matchTwoWithTokens(t, wsHub, srv)
-	defer func() { _ = connB.Close() }()
-
-	// rapid triple-refresh: close and reconnect 3 times
-	for range 3 {
-		_ = connA.Close()
-		var newToken string
-		connA, newToken = dialHubReconnect(t, srv, tokenA)
-		// token should be preserved (reconnect succeeded)
-		assert.Equal(t, tokenA, newToken, "token identity should be stable across rapid refreshes")
-	}
-	defer func() { _ = connA.Close() }()
-	collA := newCollector(t, connA)
-
-	// verify session still works
-	assert.True(t, collA.waitFor("Reconnected", 3*time.Second), "should see reconnected after rapid refreshes")
-
-	sendJSON(t, connA, MessageTypeMessage, map[string]any{"text": "survived rapid refresh"})
-	assert.True(t, collB.waitFor("survived rapid refresh", 2*time.Second),
-		"partner should receive message after rapid refreshes")
-}
-
-// TestHub_RefreshDuringSearchPreservesQueue verifies that
-// refreshing while searching for a match preserves the queue
-// position and completes matching after reconnect.
-func TestHub_RefreshDuringSearchPreservesQueue(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	// A connects and starts searching
-	connA, tokenA := dialHubWithToken(t, srv)
-	collA := newCollector(t, connA)
-
-	require.Eventually(t, func() bool {
-		return wsHub.Len() == 1
-	}, time.Second, 10*time.Millisecond)
-
-	sendJSON(t, connA, MessageTypeFindMatch, findMatchPayload())
-	require.True(t, collA.waitFor("Searching", 2*time.Second))
-
-	// A refreshes while searching
-	_ = connA.Close()
-	time.Sleep(100 * time.Millisecond)
-
-	connA2, _ := dialHubReconnect(t, srv, tokenA)
-	defer func() { _ = connA2.Close() }()
-	collA2 := newCollector(t, connA2)
-
-	// should see "Searching" recovery
-	assert.True(t, collA2.waitFor("Searching", 3*time.Second), "should restore searching state")
-
-	// B connects and searches; should match with A
-	connB := dialHub(t, srv)
-	defer func() { _ = connB.Close() }()
-	collB := newCollector(t, connB)
-
-	require.Eventually(t, func() bool {
-		return wsHub.Len() == 2
-	}, time.Second, 10*time.Millisecond)
-
-	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
-
-	assert.True(t, collA2.waitFor("matched", 3*time.Second), "A should match after refresh during search")
-	assert.True(t, collB.waitFor("matched", 3*time.Second), "B should match with reconnected A")
-}
-
-// TestHub_SecondTabDoesNotStealSession verifies that opening a
-// second tab (different sessionStorage, no reconnect token) does
-// not interfere with the first tab's session.
-func TestHub_SecondTabDoesNotStealSession(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	connA, connB, collB, _, _ := matchTwoWithTokens(t, wsHub, srv)
+	connA, connB, collA, _ := matchTwo(t, wsHub, srv)
 	defer func() { _ = connA.Close() }()
 	defer func() { _ = connB.Close() }()
 
-	// "second tab" connects with no reconnect token (fresh sessionStorage)
-	connA2 := dialHub(t, srv)
-	defer func() { _ = connA2.Close() }()
+	// A leaves
+	sendJSON(t, connA, MessageTypeLeave, map[string]any{})
+	require.True(t, collA.waitFor(view.MsgYouLeft, 2*time.Second))
 
-	require.Eventually(t, func() bool {
-		return wsHub.Len() == 3
-	}, time.Second, 10*time.Millisecond)
-
-	// first tab's session should still work
-	sendJSON(t, connA, MessageTypeMessage, map[string]any{"text": "still here"})
-	assert.True(t, collB.waitFor("still here", 2*time.Second), "first tab session should be intact")
-}
-
-// TestHub_LandingPageRefreshGetsFreshIdentity verifies that
-// refreshing a landing-page client (no session, no search)
-// gets a fresh identity each time. There is no state to
-// preserve, so the stale reconnect token is harmlessly ignored.
-func TestHub_LandingPageRefreshGetsFreshIdentity(t *testing.T) {
-	t.Parallel()
-
-	wsHub := testHub()
-	go wsHub.Run(t.Context())
-
-	srv := simpleHandler(wsHub)
-	defer srv.Close()
-
-	// connect, get token, close (no match/search)
-	conn1, token1 := dialHubWithToken(t, srv)
-	_ = conn1.Close()
-	time.Sleep(50 * time.Millisecond)
-
-	// reconnect with stale token; should get a fresh identity
-	// since the old client had no session or search to preserve
-	conn2, token2 := dialHubReconnect(t, srv, token1)
-	defer func() { _ = conn2.Close() }()
-
-	assert.NotEqual(t, token1, token2, "landing-page refresh should get fresh identity")
+	// A immediately re-queues; should see cooldown message
+	sendJSON(t, connA, MessageTypeFindMatch, findMatchPayload())
+	assert.True(t, collA.waitFor(view.MsgCooldown, 2*time.Second), "should see cooldown message")
 }

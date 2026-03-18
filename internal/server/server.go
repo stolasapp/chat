@@ -45,6 +45,7 @@ type Config struct {
 	Addr           string
 	Hub            *hub.Hub
 	AllowedOrigins []string
+	HSTS           bool
 }
 
 // Server wraps an http.Server with configured routes and the
@@ -62,12 +63,13 @@ func New(cfg Config) *Server {
 	mux.Handle("GET /", templ.Handler(view.LandingPage()))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
 	mux.Handle("GET /ws", wsHandler)
+	mux.HandleFunc("/", notFoundHandler)
 
 	return &Server{
 		wsHandler: wsHandler,
 		http: &http.Server{
 			Addr:              cfg.Addr,
-			Handler:           mux,
+			Handler:           securityHeaders(mux, cfg.HSTS),
 			ReadHeaderTimeout: readHeaderTimeout,
 			IdleTimeout:       idleTimeout,
 			MaxHeaderBytes:    maxHeaderBytes,
@@ -99,6 +101,7 @@ func (s *Server) ListenAndServe(ctx context.Context) {
 		}
 	}()
 
+	// block until the server exits or the context is cancelled
 	<-ctx.Done()
 	slog.Info("server shutting down", slog.Any("cause", context.Cause(ctx)))
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
@@ -106,4 +109,9 @@ func (s *Server) ListenAndServe(ctx context.Context) {
 	if err := s.http.Shutdown(shutdownCtx); err != nil {
 		slog.Error("http shutdown failed", slog.Any("error", err))
 	}
+}
+
+func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	_ = view.ErrorPage(http.StatusNotFound, "Page not found.").Render(r.Context(), w)
 }

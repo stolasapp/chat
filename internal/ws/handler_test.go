@@ -79,9 +79,10 @@ func TestHandler_UniqueTokens(t *testing.T) {
 	defer srv.Close()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
+	// open and close connections sequentially so each gets a
+	// unique token before the next connects
 	tokens := make(map[string]struct{})
-	conns := make([]*websocket.Conn, 5)
-	for idx := range conns {
+	for range 5 {
 		conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 		require.NoError(t, err)
 		if resp != nil && resp.Body != nil {
@@ -95,9 +96,6 @@ func TestHandler_UniqueTokens(t *testing.T) {
 		var tok hub.TokenMessage
 		require.NoError(t, json.Unmarshal(env.Payload, &tok))
 		tokens[string(tok.Token)] = struct{}{}
-		conns[idx] = conn
-	}
-	for _, conn := range conns {
 		_ = conn.Close()
 	}
 

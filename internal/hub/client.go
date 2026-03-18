@@ -48,12 +48,13 @@ type Client struct {
 	token       match.Token
 	limiter     *rate.Limiter
 
-	// profile, lastPartner, and attempt are only accessed from
-	// the hub's Run goroutine. Do not read or write from other
-	// goroutines.
-	profile     *match.Profile
-	lastPartner match.Token
-	attempt     match.Token
+	// profile, lastPartner, attempt, and lastSearchAt are only
+	// accessed from the hub's Run goroutine. Do not read or
+	// write from other goroutines.
+	profile      *match.Profile
+	lastPartner  match.Token
+	attempt      match.Token
+	lastSearchAt time.Time
 
 	// reconnectToken is set before registration if the client
 	// is attempting to resume a previous session (read from

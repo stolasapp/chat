@@ -29,6 +29,7 @@ const (
 
 // Handler upgrades HTTP connections to WebSocket and registers
 // them with the Hub. It manages its own per-IP rate limiter.
+// Per-IP connection limits are deferred to the reverse proxy.
 type Handler struct {
 	hub      *hub.Hub
 	limiter  *ratelimit.Keyed[string]

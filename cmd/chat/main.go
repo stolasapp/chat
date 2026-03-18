@@ -17,6 +17,7 @@ import (
 func main() {
 	addr := flag.String("addr", envOr("ADDR", ":8080"), "listen address")
 	debug := flag.Bool("debug", false, "enable debug logging")
+	hsts := flag.Bool("hsts", false, "enable HSTS header")
 	flag.Parse()
 
 	level := slog.LevelInfo
@@ -38,6 +39,7 @@ func main() {
 		server.New(server.Config{
 			Addr: *addr,
 			Hub:  wsHub,
+			HSTS: *hsts,
 		}).ListenAndServe(sigCtx)
 	}()
 
