@@ -38,16 +38,15 @@ var ErrClientClosed = errors.New("client closed")
 //
 //nolint:containedctx // ctx is the connection-scoped context, cancelled on Close
 type Client struct {
-	hub          *Hub
-	conn         *websocket.Conn
-	send         chan []byte
-	ctx          context.Context
-	cancel       context.CancelCauseFunc
-	readStopped  chan struct{}
-	done         chan struct{}
-	token        match.Token
-	refreshToken match.Token
-	limiter      *rate.Limiter
+	hub         *Hub
+	conn        *websocket.Conn
+	send        chan []byte
+	ctx         context.Context
+	cancel      context.CancelCauseFunc
+	readStopped chan struct{}
+	done        chan struct{}
+	token       match.Token
+	limiter     *rate.Limiter
 
 	// profile, lastPartner, and attempt are only accessed from
 	// the hub's Run goroutine. Do not read or write from other
@@ -55,24 +54,28 @@ type Client struct {
 	profile     *match.Profile
 	lastPartner match.Token
 	attempt     match.Token
+
+	// reconnectToken is set before registration if the client
+	// is attempting to resume a previous session (read from
+	// query param). Read once by the hub's register handler.
+	reconnectToken match.Token
 }
 
 // NewClient creates a client and starts its read/write pumps.
 // The context is used for the client's lifetime and cancelled
 // on Close.
-func (h *Hub) NewClient(ctx context.Context, conn *websocket.Conn, token, refreshToken match.Token) *Client {
+func (h *Hub) NewClient(ctx context.Context, conn *websocket.Conn, token match.Token) *Client {
 	ctx, cancel := context.WithCancelCause(ctx)
 	client := &Client{
-		hub:          h,
-		conn:         conn,
-		send:         make(chan []byte, sendBufSize),
-		ctx:          ctx,
-		cancel:       cancel,
-		readStopped:  make(chan struct{}),
-		done:         make(chan struct{}),
-		token:        token,
-		refreshToken: refreshToken,
-		limiter:      rate.NewLimiter(clientByteRate, clientByteBurst),
+		hub:         h,
+		conn:        conn,
+		send:        make(chan []byte, sendBufSize),
+		ctx:         ctx,
+		cancel:      cancel,
+		readStopped: make(chan struct{}),
+		done:        make(chan struct{}),
+		token:       token,
+		limiter:     rate.NewLimiter(clientByteRate, clientByteBurst),
 	}
 	h.clientWG.Go(client.writePump)
 	go client.readPump()
@@ -82,8 +85,11 @@ func (h *Hub) NewClient(ctx context.Context, conn *websocket.Conn, token, refres
 // Token returns the client's session token.
 func (c *Client) Token() match.Token { return c.token }
 
-// RefreshToken returns the client's refresh token.
-func (c *Client) RefreshToken() match.Token { return c.refreshToken }
+// SetReconnectToken stores a token for session resumption. Must
+// be called before Register.
+func (c *Client) SetReconnectToken(token match.Token) {
+	c.reconnectToken = token
+}
 
 // Send marshals a Message into a JSON Envelope and enqueues it for
 // sending. Used for protocol messages (token, key_exchange, etc.)

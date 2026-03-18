@@ -13,6 +13,7 @@ let ws = null;
 let typingTimeout = null;
 let isTyping = false;
 
+
 // --- Initialization ---
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -51,6 +52,18 @@ document.addEventListener("htmx:wsClose", () => {
   ws = null;
   isTyping = false;
   clearTimeout(typingTimeout);
+
+  const container = document.getElementById(IDs.wsContainer);
+  if (container === null) return;
+  const token = sessionStorage.getItem("session_token");
+  if (token !== null) {
+    container.setAttribute(
+      "ws-connect",
+      "/ws?token=" + encodeURIComponent(token),
+    );
+  } else {
+    container.setAttribute("ws-connect", "/ws");
+  }
 });
 
 // --- Typing indicator ---
@@ -103,9 +116,7 @@ document.addEventListener("htmx:wsBeforeMessage", (event) => {
   switch (env.type) {
     case "token":
       sessionStorage.setItem("session_token", env.payload.token);
-      sessionStorage.setItem("refresh_token", env.payload.refresh);
       break;
-
     case "rate_limited":
       console.warn(
         "rate limited, retry after",

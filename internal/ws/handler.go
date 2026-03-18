@@ -76,24 +76,14 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	token := match.NewToken()
-	refresh := match.NewToken()
-
 	// detach from the request context so the client's lifetime
 	// extends beyond the HTTP handler return
 	connCtx := context.WithoutCancel(request.Context())
-	client := h.hub.NewClient(connCtx, conn, token, refresh)
+	client := h.hub.NewClient(connCtx, conn, token)
 
-	// send token before registering to avoid a race between
-	// Send writing to client.send and the hub receiving the
-	// client pointer from the register channel
-	if err := client.Send(request.Context(), hub.TokenMessage{
-		Token:   token,
-		Refresh: refresh,
-	}); err != nil {
-		slog.Warn("failed to send token message", slog.Any("error", err))
-		client.Close(hub.ErrClientClosed)
-		closeConn(conn, websocket.CloseInternalServerErr, "internal error")
-		return
+	// read reconnect token from query param
+	if qToken := request.URL.Query().Get("token"); qToken != "" {
+		client.SetReconnectToken(match.Token(qToken))
 	}
 
 	if err := h.hub.Register(request.Context(), client); err != nil {

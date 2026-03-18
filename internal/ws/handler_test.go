@@ -17,7 +17,7 @@ import (
 	"github.com/stolasapp/chat/internal/match"
 )
 
-func dialTestServer(t *testing.T) (*hub.Hub, *websocket.Conn, func()) {
+func dialTestServer(t *testing.T) (*hub.Hub, string, func()) {
 	t.Helper()
 
 	wsHub := hub.NewHub(match.NewMatcher(match.DefaultMatchTimeout))
@@ -25,7 +25,7 @@ func dialTestServer(t *testing.T) (*hub.Hub, *websocket.Conn, func()) {
 	go wsHub.Run(ctx)
 
 	srv := httptest.NewServer(NewHandler(wsHub, nil))
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err)
@@ -33,50 +33,40 @@ func dialTestServer(t *testing.T) (*hub.Hub, *websocket.Conn, func()) {
 		_ = resp.Body.Close()
 	}
 
+	// read the first message which should be a TokenMessage
+	_, msg, err := conn.ReadMessage()
+	require.NoError(t, err)
+	var env hub.Envelope
+	require.NoError(t, json.Unmarshal(msg, &env))
+	require.Equal(t, hub.MessageTypeToken, env.Type)
+	var tok hub.TokenMessage
+	require.NoError(t, json.Unmarshal(env.Payload, &tok))
+	require.NotEmpty(t, tok.Token)
+
 	cleanup := func() {
 		_ = conn.Close()
 		cancel()
 		srv.Close()
 	}
-	return wsHub, conn, cleanup
-}
-
-func readTokenMessage(t *testing.T, conn *websocket.Conn) hub.TokenMessage {
-	t.Helper()
-	_, msg, err := conn.ReadMessage()
-	require.NoError(t, err)
-
-	var env hub.Envelope
-	require.NoError(t, json.Unmarshal(msg, &env))
-	require.Equal(t, hub.MessageTypeToken, env.Type)
-
-	var token hub.TokenMessage
-	require.NoError(t, json.Unmarshal(env.Payload, &token))
-	return token
+	return wsHub, string(tok.Token), cleanup
 }
 
 func TestHandler_TokenOnConnect(t *testing.T) {
 	t.Parallel()
 
-	_, conn, cleanup := dialTestServer(t)
+	_, token, cleanup := dialTestServer(t)
 	defer cleanup()
 
-	token := readTokenMessage(t, conn)
-
-	assert.Len(t, token.Token, 16, "token should be 16 hex chars")
-	assert.Len(t, token.Refresh, 16, "refresh should be 16 hex chars")
-	assert.NotEqual(t, token.Token, token.Refresh, "token and refresh should differ")
+	assert.Len(t, token, 16, "session token should be 16 hex chars")
 }
 
 func TestHandler_ClientRegistered(t *testing.T) {
 	t.Parallel()
 
-	wsHub, conn, cleanup := dialTestServer(t)
+	wsHub, _, cleanup := dialTestServer(t)
 	defer cleanup()
 
-	readTokenMessage(t, conn)
-
-	require.Eventually(t, func() bool { return wsHub.Len() == 1 }, time.Second, 10*time.Millisecond)
+	assert.Equal(t, 1, wsHub.Len())
 }
 
 func TestHandler_UniqueTokens(t *testing.T) {
@@ -87,9 +77,9 @@ func TestHandler_UniqueTokens(t *testing.T) {
 
 	srv := httptest.NewServer(NewHandler(wsHub, nil))
 	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	tokens := make(map[match.Token]struct{})
+	tokens := make(map[string]struct{})
 	conns := make([]*websocket.Conn, 5)
 	for idx := range conns {
 		conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -97,17 +87,21 @@ func TestHandler_UniqueTokens(t *testing.T) {
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}
+		// read TokenMessage to get the token
+		_, msg, err := conn.ReadMessage()
+		require.NoError(t, err)
+		var env hub.Envelope
+		require.NoError(t, json.Unmarshal(msg, &env))
+		var tok hub.TokenMessage
+		require.NoError(t, json.Unmarshal(env.Payload, &tok))
+		tokens[string(tok.Token)] = struct{}{}
 		conns[idx] = conn
-
-		tok := readTokenMessage(t, conn)
-		tokens[tok.Token] = struct{}{}
-		tokens[tok.Refresh] = struct{}{}
 	}
 	for _, conn := range conns {
 		_ = conn.Close()
 	}
 
-	assert.Len(t, tokens, 10, "all tokens should be unique")
+	assert.Len(t, tokens, 5, "all session tokens should be unique")
 }
 
 func TestHandler_RateLimited(t *testing.T) {
@@ -119,7 +113,7 @@ func TestHandler_RateLimited(t *testing.T) {
 	handler := NewHandler(wsHub, nil)
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
 	// exhaust the burst (ipBurst = 5)
 	conns := make([]*websocket.Conn, ipBurst)
@@ -169,7 +163,7 @@ func TestHandler_CheckOrigin_AllowedList(t *testing.T) {
 	allowed := []string{"http://example.com", "https://chat.example.com"}
 	srv := httptest.NewServer(NewHandler(wsHub, allowed))
 	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
 	header := http.Header{"Origin": []string{"http://example.com"}}
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
@@ -196,7 +190,7 @@ func TestHandler_CheckOrigin_SameHost(t *testing.T) {
 
 	srv := httptest.NewServer(NewHandler(wsHub, nil))
 	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/"
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
 	srvHost := strings.TrimPrefix(srv.URL, "http://")
 	header := http.Header{"Origin": []string{"http://" + srvHost}}

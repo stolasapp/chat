@@ -24,6 +24,7 @@ const (
 	ElementClientCount  = "client-count"
 	ElementTyping       = "typing-indicator"
 	ElementCharCount    = "char-count"
+	ElementWSContainer  = "ws-container"
 
 	// MaxMessageLength is the maximum allowed chat message length
 	// in characters. Shared with JS via window.IDs.
@@ -43,6 +44,7 @@ func elementIDs() templ.Component {
 			"messageInput":     ElementMessageInput,
 			"findMatchBtn":     ElementFindMatchBtn,
 			"charCount":        ElementCharCount,
+			"wsContainer":      ElementWSContainer,
 			"maxMessageLength": MaxMessageLength,
 		}
 		data, err := json.Marshal(ids)

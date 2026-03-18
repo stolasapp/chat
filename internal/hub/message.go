@@ -51,8 +51,6 @@ func NewEnvelope(msg Message) (Envelope, error) {
 // typed message based on Type.
 func (e Envelope) Parse() (Message, error) {
 	switch e.Type {
-	case MessageTypeToken:
-		return unmarshalPayload[TokenMessage](e.Payload)
 	case MessageTypeFindMatch:
 		return unmarshalPayload[FindMatchMessage](e.Payload)
 	case MessageTypeLeave:
@@ -88,11 +86,10 @@ func MarshalMessage(msg Message) ([]byte, error) {
 	return json.Marshal(env)
 }
 
-// TokenMessage is sent to the client on initial connection with
-// session and refresh tokens.
+// TokenMessage is sent by the server after registration with the
+// client's final identity token.
 type TokenMessage struct {
-	Token   match.Token `json:"token"`
-	Refresh match.Token `json:"refresh"`
+	Token match.Token `json:"token"`
 }
 
 // MessageType implements Message.

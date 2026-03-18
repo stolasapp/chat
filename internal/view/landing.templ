@@ -2,9 +2,20 @@ package view
 
 templ LandingPage() {
 	@Layout("Stolas Chat") {
-		<div id="ws-container" hx-ext="ws" ws-connect="/ws" class="h-full">
+		<div id={ ElementWSContainer } hx-ext="ws" ws-connect="/ws" class="h-full">
 			@LandingContent()
 		</div>
+		<script>
+			(function() {
+				const t = sessionStorage.getItem("session_token");
+				if (t) {
+					document.getElementById(IDs.wsContainer).setAttribute(
+						"ws-connect",
+						"/ws?token=" + encodeURIComponent(t)
+					);
+				}
+			})();
+		</script>
 	}
 }
 

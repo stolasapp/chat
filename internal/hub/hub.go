@@ -10,12 +10,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/a-h/templ"
+
 	"github.com/stolasapp/chat/internal/catalog"
 	"github.com/stolasapp/chat/internal/match"
 	"github.com/stolasapp/chat/internal/view"
 )
 
-const shutdownTimeout = 10 * time.Second
+const (
+	shutdownTimeout             = 10 * time.Second
+	defaultGracePeriod          = 15 * time.Second
+	defaultReconnectNotifyDelay = 2 * time.Second
+)
 
 // excessiveNewlines matches 3 or more consecutive newlines
 // (with optional carriage returns). Used to clamp whitespace
@@ -29,32 +35,61 @@ type clientMessage struct {
 	envelope Envelope
 }
 
+// detachedClient holds state for a client that disconnected but
+// may reconnect within the grace period. Session entries and
+// matcher queue position are preserved until the timer expires.
+type detachedClient struct {
+	token           match.Token
+	profile         *match.Profile
+	lastPartner     match.Token
+	attempt         match.Token // non-empty if was searching
+	graceTimer      *time.Timer // fires after gracePeriod
+	notifyTimer     *time.Timer // fires after reconnectNotifyDelay
+	notifiedPartner bool        // whether reconnecting indicator was sent
+}
+
 // Hub maintains the set of active clients, dispatches messages,
 // and coordinates matchmaking. All client map mutations happen in
 // the Run goroutine.
 type Hub struct {
-	clients    map[*Client]struct{}           // +checklocks:mu
-	tokens     map[match.Token]*Client        // +checklocks:mu
-	sessions   map[match.Token]*match.Session // +checklocks:mu
-	register   chan *Client
-	unregister chan *Client
-	incoming   chan clientMessage
-	matcher    *match.Matcher
-	mu         sync.RWMutex
-	running    atomic.Bool
-	clientWG   sync.WaitGroup
+	clients      map[*Client]struct{}            // +checklocks:mu
+	tokens       map[match.Token]*Client         // +checklocks:mu
+	sessions     map[match.Token]*match.Session  // +checklocks:mu
+	detached     map[match.Token]*detachedClient // +checklocks:mu
+	register     chan *Client
+	unregister   chan *Client
+	incoming     chan clientMessage
+	graceExpired chan match.Token
+	matcher      *match.Matcher
+	mu           sync.RWMutex
+	running      atomic.Bool
+	clientWG     sync.WaitGroup
+
+	// GracePeriod is how long a detached client's session is
+	// preserved before teardown. Defaults to 15s. Set before
+	// calling Run; read-only thereafter.
+	GracePeriod time.Duration // +checklocksignore: read-only after init
+
+	// ReconnectNotifyDelay is how long to wait before showing
+	// the "reconnecting" indicator to the partner. Defaults to 2s.
+	// Set before calling Run; read-only thereafter.
+	ReconnectNotifyDelay time.Duration // +checklocksignore: read-only after init
 }
 
 // NewHub creates a Hub ready to Run.
 func NewHub(matcher *match.Matcher) *Hub {
 	return &Hub{
-		clients:    make(map[*Client]struct{}),
-		tokens:     make(map[match.Token]*Client),
-		sessions:   make(map[match.Token]*match.Session),
-		register:   make(chan *Client, sendBufSize),
-		unregister: make(chan *Client, sendBufSize),
-		incoming:   make(chan clientMessage, sendBufSize),
-		matcher:    matcher,
+		clients:              make(map[*Client]struct{}),
+		tokens:               make(map[match.Token]*Client),
+		sessions:             make(map[match.Token]*match.Session),
+		detached:             make(map[match.Token]*detachedClient),
+		register:             make(chan *Client, sendBufSize),
+		unregister:           make(chan *Client, sendBufSize),
+		incoming:             make(chan clientMessage, sendBufSize),
+		graceExpired:         make(chan match.Token, sendBufSize),
+		matcher:              matcher,
+		GracePeriod:          defaultGracePeriod,
+		ReconnectNotifyDelay: defaultReconnectNotifyDelay,
 	}
 }
 
@@ -96,12 +131,13 @@ func (h *Hub) ClientByToken(token match.Token) *Client {
 	return h.tokens[token]
 }
 
-// Len returns the number of connected clients. Safe for concurrent
-// use.
+// Len returns the number of connected and detached clients. Safe
+// for concurrent use. Detached clients are included so the count
+// does not drop during brief disconnects.
 func (h *Hub) Len() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return len(h.clients)
+	return len(h.clients) + len(h.detached)
 }
 
 // Run processes register/unregister events until ctx is canceled.
@@ -127,16 +163,15 @@ func (h *Hub) run(ctx context.Context, matcherCancel context.CancelFunc) {
 	for {
 		select {
 		case client := <-h.register:
-			h.mu.Lock()
-			h.clients[client] = struct{}{}
-			h.tokens[client.token] = client
-			count := len(h.clients)
-			h.mu.Unlock()
-			slog.Info("client registered", slog.Int("clients", count))
+			h.handleRegister(ctx, client)
 			countDirty = true
 
 		case client := <-h.unregister:
 			h.handleUnregister(ctx, client)
+			countDirty = true
+
+		case token := <-h.graceExpired:
+			h.handleGraceExpired(ctx, token)
 			countDirty = true
 
 		case msg := <-h.incoming:
@@ -164,8 +199,8 @@ func (h *Hub) run(ctx context.Context, matcherCancel context.CancelFunc) {
 
 func (h *Hub) broadcastClientCount(ctx context.Context) {
 	h.mu.RLock()
-	count := len(h.clients)
-	clients := make([]*Client, 0, count)
+	count := len(h.clients) + len(h.detached)
+	clients := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
 		clients = append(clients, client)
 	}
@@ -191,26 +226,229 @@ func (h *Hub) handleUnregister(ctx context.Context, client *Client) {
 	}
 
 	delete(h.clients, client)
-	wasSearching := client.attempt != ""
-	client.attempt = ""
 	client.Close(ErrClientClosed)
-	// TODO(phase6): retain token mapping with a TTL
-	// for reconnect grace period instead of deleting
-	// immediately.
+
+	_, inSession := h.sessions[client.token]
+	wasSearching := client.attempt != ""
+
+	if inSession || wasSearching {
+		// detach: preserve session and queue position for
+		// reconnection within the grace period
+		delete(h.tokens, client.token)
+		entry := &detachedClient{
+			token:       client.token,
+			profile:     client.profile,
+			lastPartner: client.lastPartner,
+			attempt:     client.attempt,
+		}
+		entry.graceTimer = time.AfterFunc(h.GracePeriod, func() {
+			select {
+			case h.graceExpired <- entry.token:
+			default:
+			}
+		})
+		if inSession {
+			partnerToken := h.sessions[client.token].Partner(client.token)
+			entry.notifyTimer = time.AfterFunc(h.ReconnectNotifyDelay, func() {
+				h.mu.Lock()
+				entry.notifiedPartner = true
+				partner := h.tokens[partnerToken]
+				h.mu.Unlock()
+				if partner != nil {
+					_ = partner.SendComponent(ctx, view.ReconnectingIndicator(true))
+				}
+			})
+		}
+		h.detached[client.token] = entry
+		count := len(h.clients) + len(h.detached)
+		h.mu.Unlock()
+
+		slog.Info("client detached", slog.Int("clients", count))
+		return
+	}
+
+	// no session or search: immediate cleanup
 	delete(h.tokens, client.token)
-	count := len(h.clients)
-	partnerClient := h.endSession(client.token)
+	count := len(h.clients) + len(h.detached)
 	h.mu.Unlock()
 
 	slog.Info("client unregistered", slog.Int("clients", count))
+}
+
+// reconnectState holds data extracted under lock for
+// post-unlock reconnect recovery.
+type reconnectState struct {
+	reconnected     bool
+	inSession       bool
+	count           int
+	partner         *Client
+	partnerProfile  *match.Profile
+	notifiedPartner bool
+	attempt         match.Token
+	oldClient       *Client // non-nil for reconnectFromRegistered
+}
+
+func (h *Hub) handleRegister(ctx context.Context, client *Client) {
+	h.mu.Lock()
+	h.clients[client] = struct{}{}
+	h.tokens[client.token] = client
+
+	var state reconnectState
+
+	// attempt session resumption if a reconnect token was
+	// provided via query param on the WS upgrade request.
+	// sessionStorage is per-tab, so cross-tab conflicts are
+	// not possible. Transferring empty state from a landing-
+	// page client is harmless (preserves token identity).
+	if client.reconnectToken != "" {
+		if entry, ok := h.detached[client.reconnectToken]; ok {
+			state = h.reconnectFromDetached(client, entry)
+		} else if old, ok := h.tokens[client.reconnectToken]; ok && old != client {
+			state = h.reconnectFromRegistered(client, old)
+		}
+	}
+
+	if !state.reconnected {
+		state.count = len(h.clients) + len(h.detached)
+	}
+	h.mu.Unlock()
+
+	if state.reconnected {
+		if state.oldClient != nil {
+			state.oldClient.Close(ErrClientClosed)
+		}
+		h.sendReconnectRecovery(ctx, client, state)
+		return
+	}
+	_ = client.Send(ctx, TokenMessage{Token: client.token})
+	slog.Info("client registered", slog.Int("clients", state.count))
+}
+
+// reconnectFromDetached reattaches a new client to a detached
+// entry. Must be called with h.mu held.
+//
+// +checklocks:h.mu
+func (h *Hub) reconnectFromDetached(client *Client, entry *detachedClient) reconnectState {
+	entry.graceTimer.Stop()
+	if entry.notifyTimer != nil {
+		entry.notifyTimer.Stop()
+	}
+	delete(h.detached, entry.token)
+
+	state := h.transferIdentity(client, entry.token, entry.profile, entry.lastPartner, entry.attempt)
+	state.notifiedPartner = entry.notifiedPartner
+	return state
+}
+
+// reconnectFromRegistered transfers state from an old client
+// that is still registered (unregister not yet processed) to a
+// new client. Must be called with h.mu held.
+//
+// +checklocks:h.mu
+func (h *Hub) reconnectFromRegistered(client *Client, oldClient *Client) reconnectState {
+	delete(h.clients, oldClient)
+	delete(h.tokens, oldClient.token)
+
+	state := h.transferIdentity(client, oldClient.token, oldClient.profile, oldClient.lastPartner, oldClient.attempt)
+	state.oldClient = oldClient
+	return state
+}
+
+// transferIdentity swaps a newly registered client's token to
+// oldToken, copies the given state fields, and builds a
+// reconnectState with session/partner info. Must be called with
+// h.mu held.
+//
+// +checklocks:h.mu
+func (h *Hub) transferIdentity(
+	client *Client,
+	oldToken match.Token,
+	profile *match.Profile,
+	lastPartner match.Token,
+	attempt match.Token,
+) reconnectState {
+	delete(h.tokens, client.token)
+	client.token = oldToken
+	client.profile = profile
+	client.lastPartner = lastPartner
+	client.attempt = attempt
+	h.tokens[oldToken] = client
+
+	state := reconnectState{
+		reconnected: true,
+		attempt:     attempt,
+		count:       len(h.clients) + len(h.detached),
+	}
+	if session := h.sessions[oldToken]; session != nil {
+		state.inSession = true
+		partnerToken := session.Partner(oldToken)
+		state.partner = h.tokens[partnerToken]
+		if state.partner != nil {
+			state.partnerProfile = state.partner.profile
+		} else if detachedPartner, ok := h.detached[partnerToken]; ok {
+			state.partnerProfile = detachedPartner.profile
+		}
+	}
+	return state
+}
+
+// sendReconnectRecovery sends state recovery HTML to a
+// reconnected client.
+func (h *Hub) sendReconnectRecovery(ctx context.Context, client *Client, state reconnectState) {
+	_ = client.Send(ctx, TokenMessage{Token: client.token})
+	if state.inSession {
+		components := []templ.Component{
+			view.ChatView(),
+			view.ClientCount(state.count),
+			view.Notify("Reconnected."),
+			view.SendButton(true),
+		}
+		if state.partnerProfile != nil {
+			matched := view.NewMatchedProfile(state.partnerProfile, client.profile.Interests)
+			components = append(components, view.MatchedNotify(matched))
+		}
+		_ = client.SendComponent(ctx, components...)
+		if state.notifiedPartner && state.partner != nil {
+			_ = state.partner.SendComponent(ctx, view.ReconnectingIndicator(false))
+		}
+	} else if state.attempt != "" {
+		_ = client.SendComponent(ctx,
+			view.ChatView(),
+			view.ClientCount(state.count),
+			view.Notify("Searching for a match..."),
+		)
+	}
+
+	slog.Info("client reconnected", slog.Int("clients", state.count))
+}
+
+func (h *Hub) handleGraceExpired(ctx context.Context, token match.Token) {
+	h.mu.Lock()
+	entry, ok := h.detached[token]
+	if !ok {
+		// already reconnected
+		h.mu.Unlock()
+		return
+	}
+
+	if entry.notifyTimer != nil {
+		entry.notifyTimer.Stop()
+	}
+	delete(h.detached, token)
+
+	partnerClient := h.endSession(token)
+	count := len(h.clients) + len(h.detached)
+	h.mu.Unlock()
 
 	if partnerClient != nil {
 		_ = partnerClient.SendComponent(ctx, view.SessionEndComponents("Your partner has left.", true)...)
 	}
 
-	if wasSearching {
-		h.matcher.Leave(ctx, client.token)
+	if entry.attempt != "" {
+		h.matcher.Leave(ctx, token)
 	}
+
+	slog.Info("grace period expired", slog.Int("clients", count))
 }
 
 func (h *Hub) dispatch(ctx context.Context, incoming clientMessage) {
@@ -238,7 +476,7 @@ func (h *Hub) handleFindMatch(ctx context.Context, client *Client, msg FindMatch
 	// if already in a session, ignore
 	h.mu.RLock()
 	_, inSession := h.sessions[client.token]
-	count := len(h.clients)
+	count := len(h.clients) + len(h.detached)
 	h.mu.RUnlock()
 	if inSession {
 		return
@@ -403,8 +641,18 @@ func (h *Hub) shutdown(ctx context.Context, matcherCancel context.CancelFunc) {
 	//    don't block after Run exits
 	h.drainChannels()
 
-	// 3. collect all clients and clear maps under lock
+	// 3. cancel all detached timers and end their sessions
 	h.mu.Lock()
+	for token, entry := range h.detached {
+		entry.graceTimer.Stop()
+		if entry.notifyTimer != nil {
+			entry.notifyTimer.Stop()
+		}
+		h.endSession(token)
+		delete(h.detached, token)
+	}
+
+	// 4. collect all clients and clear maps under lock
 	clients := make([]*Client, 0, len(h.clients))
 	for client := range h.clients {
 		clients = append(clients, client)
@@ -413,7 +661,7 @@ func (h *Hub) shutdown(ctx context.Context, matcherCancel context.CancelFunc) {
 	}
 	h.mu.Unlock()
 
-	// 4. notify and close all clients concurrently, waiting
+	// 5. notify and close all clients concurrently, waiting
 	//    for each write pump to drain
 	var closeWG sync.WaitGroup
 	for _, client := range clients {

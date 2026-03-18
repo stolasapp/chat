@@ -9,28 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stolasapp/chat/internal/catalog"
-	"github.com/stolasapp/chat/internal/match"
 )
-
-func TestMarshalMessage_TokenMessage(t *testing.T) {
-	t.Parallel()
-
-	data, err := MarshalMessage(TokenMessage{
-		Token:   "abc123",
-		Refresh: "def456",
-	})
-	require.NoError(t, err)
-
-	var env Envelope
-	require.NoError(t, json.Unmarshal(data, &env))
-
-	assert.Equal(t, MessageTypeToken, env.Type)
-
-	var token TokenMessage
-	require.NoError(t, json.Unmarshal(env.Payload, &token))
-	assert.Equal(t, match.Token("abc123"), token.Token)
-	assert.Equal(t, match.Token("def456"), token.Refresh)
-}
 
 func TestMarshalMessage_RateLimitedMessage(t *testing.T) {
 	t.Parallel()
@@ -66,7 +45,7 @@ func TestMarshalMessage_AllTypes(t *testing.T) {
 	}{
 		{
 			name:         "token",
-			msg:          TokenMessage{Token: "t", Refresh: "r"},
+			msg:          TokenMessage{Token: "abc123"},
 			expectedType: MessageTypeToken,
 		},
 		{
@@ -109,6 +88,14 @@ func TestEnvelope_Parse(t *testing.T) {
 		env     Envelope
 		wantErr bool
 	}{
+		{
+			name: "token is server-only, not parseable",
+			env: Envelope{
+				Type:    MessageTypeToken,
+				Payload: json.RawMessage(`{"token":"abc123"}`),
+			},
+			wantErr: true,
+		},
 		{
 			name: "valid find_match minimal",
 			env: Envelope{
