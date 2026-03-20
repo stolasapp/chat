@@ -39,20 +39,26 @@ func TestRole_RoundTrip(t *testing.T) {
 func TestInterest_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	for _, group := range catalog.Groups() {
-		data, err := json.Marshal(group.Category)
+	for _, interest := range catalog.AllInterests() {
+		data, err := json.Marshal(interest)
 		require.NoError(t, err)
 
 		var got catalog.Interest
 		require.NoError(t, json.Unmarshal(data, &got))
-		assert.Equal(t, group.Category, got)
+		assert.Equal(t, interest, got)
+	}
+}
 
-		for _, item := range group.Items {
-			data, err = json.Marshal(item)
-			require.NoError(t, err)
-			require.NoError(t, json.Unmarshal(data, &got))
-			assert.Equal(t, item, got)
-		}
+func TestSpecies_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	for _, species := range catalog.AllSpecies() {
+		data, err := json.Marshal(species)
+		require.NoError(t, err)
+
+		var got catalog.Species
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, species, got)
 	}
 }
 
@@ -75,6 +81,14 @@ func TestInterest_UnmarshalText_Invalid(t *testing.T) {
 
 	var interest catalog.Interest
 	assert.Error(t, interest.UnmarshalText([]byte("unknown")))
+}
+
+func TestSpecies_UnmarshalText_Invalid(t *testing.T) {
+	t.Parallel()
+
+	var species catalog.Species
+	require.NoError(t, species.UnmarshalText([]byte("unknown")))
+	assert.Equal(t, catalog.Species(""), species)
 }
 
 func TestRoleMatchesFilter(t *testing.T) {
@@ -194,40 +208,12 @@ func TestCompatible(t *testing.T) {
 			a: &Profile{
 				Gender:           catalog.GenderMale,
 				Role:             catalog.RoleDominant,
-				ExcludeInterests: catalog.NewSet(catalog.InterestBasketball),
+				ExcludeInterests: catalog.NewSet(catalog.Interest("Basketball")),
 			},
 			b: &Profile{
 				Gender:    catalog.GenderFemale,
 				Role:      catalog.RoleSubmissive,
-				Interests: catalog.NewSet(catalog.InterestBasketball),
-			},
-			want: false,
-		},
-		{
-			name: "exclude category blocks item",
-			a: &Profile{
-				Gender:           catalog.GenderMale,
-				Role:             catalog.RoleDominant,
-				ExcludeInterests: catalog.NewSet(catalog.InterestTeamSports),
-			},
-			b: &Profile{
-				Gender:    catalog.GenderFemale,
-				Role:      catalog.RoleSubmissive,
-				Interests: catalog.NewSet(catalog.InterestBasketball),
-			},
-			want: false,
-		},
-		{
-			name: "exclude category blocks category itself",
-			a: &Profile{
-				Gender:           catalog.GenderMale,
-				Role:             catalog.RoleDominant,
-				ExcludeInterests: catalog.NewSet(catalog.InterestTeamSports),
-			},
-			b: &Profile{
-				Gender:    catalog.GenderFemale,
-				Role:      catalog.RoleSubmissive,
-				Interests: catalog.NewSet(catalog.InterestTeamSports),
+				Interests: catalog.NewSet(catalog.Interest("Basketball")),
 			},
 			want: false,
 		},
@@ -236,12 +222,12 @@ func TestCompatible(t *testing.T) {
 			a: &Profile{
 				Gender:           catalog.GenderMale,
 				Role:             catalog.RoleDominant,
-				ExcludeInterests: catalog.NewSet(catalog.InterestBasketball),
+				ExcludeInterests: catalog.NewSet(catalog.Interest("Basketball")),
 			},
 			b: &Profile{
 				Gender:    catalog.GenderFemale,
 				Role:      catalog.RoleSubmissive,
-				Interests: catalog.NewSet(catalog.InterestSoccer),
+				Interests: catalog.NewSet(catalog.Interest("Soccer")),
 			},
 			want: true,
 		},
@@ -275,42 +261,33 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "exact match single",
-			a:    &Profile{Interests: catalog.NewSet(catalog.InterestBasketball)},
-			b:    &Profile{Interests: catalog.NewSet(catalog.InterestBasketball)},
+			a:    &Profile{Interests: catalog.NewSet(catalog.Interest("Basketball"))},
+			b:    &Profile{Interests: catalog.NewSet(catalog.Interest("Basketball"))},
 			want: 1.0,
 		},
 		{
 			name: "exact match multiple",
 			a: &Profile{Interests: catalog.NewSet(
-				catalog.InterestBasketball, catalog.InterestTennis,
+				catalog.Interest("Basketball"), catalog.Interest("Tennis"),
 			)},
 			b: &Profile{Interests: catalog.NewSet(
-				catalog.InterestBasketball, catalog.InterestTennis,
+				catalog.Interest("Basketball"), catalog.Interest("Tennis"),
 			)},
 			want: 1.0,
 		},
 		{
 			name: "completely disjoint",
-			a:    &Profile{Interests: catalog.NewSet(catalog.InterestBasketball)},
-			b:    &Profile{Interests: catalog.NewSet(catalog.InterestTennis)},
+			a:    &Profile{Interests: catalog.NewSet(catalog.Interest("Basketball"))},
+			b:    &Profile{Interests: catalog.NewSet(catalog.Interest("Tennis"))},
 			want: 0,
-		},
-		{
-			name: "cross-level: category to item",
-			a:    &Profile{Interests: catalog.NewSet(catalog.InterestTeamSports)},
-			b:    &Profile{Interests: catalog.NewSet(catalog.InterestBasketball)},
-			// A has TeamSports, B has Basketball (under TeamSports)
-			// A->B: cross-level 0.75, B->A: cross-level 0.75
-			// union size: 2, weightSum = 1.5, score = 1.5 / 4 = 0.375
-			want: 0.375,
 		},
 		{
 			name: "partial overlap",
 			a: &Profile{Interests: catalog.NewSet(
-				catalog.InterestBasketball, catalog.InterestTennis,
+				catalog.Interest("Basketball"), catalog.Interest("Tennis"),
 			)},
 			b: &Profile{Interests: catalog.NewSet(
-				catalog.InterestBasketball, catalog.InterestGolf,
+				catalog.Interest("Basketball"), catalog.Interest("Golf"),
 			)},
 			// A->B: basketball=1.0, tennis=0.0
 			// B->A: basketball=1.0, golf=0.0
@@ -320,7 +297,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "one empty",
-			a:    &Profile{Interests: catalog.NewSet(catalog.InterestBasketball)},
+			a:    &Profile{Interests: catalog.NewSet(catalog.Interest("Basketball"))},
 			b:    &Profile{},
 			want: wildcardScore,
 		},

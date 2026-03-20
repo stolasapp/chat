@@ -28,31 +28,23 @@ var roleOpts = func() []selectOption {
 	return opts
 }()
 
-// interestGroup is a view-layer interest group with string values
-// for template rendering.
-type interestGroup struct {
-	Name  string
-	Items []interestItem
-}
-
-type interestItem struct {
-	Value string
-	Label string
-}
-
-// interestGroupOpts is computed once from the static catalog.
-var interestGroupOpts = func() []interestGroup {
-	catalogGroups := catalog.Groups()
-	viewGroups := make([]interestGroup, len(catalogGroups))
-	for idx, group := range catalogGroups {
-		items := make([]interestItem, len(group.Items))
-		for jdx, item := range group.Items {
-			items[jdx] = interestItem{Value: item.String(), Label: item.Label()}
-		}
-		viewGroups[idx] = interestGroup{
-			Name:  group.Category.Label(),
-			Items: items,
-		}
+// speciesOpts is computed once from the static catalog.
+var speciesOpts = func() []selectOption {
+	species := catalog.AllSpecies()
+	opts := make([]selectOption, len(species))
+	for idx, s := range species {
+		opts[idx] = selectOption{Value: s.String(), Label: s.Label()}
 	}
-	return viewGroups
+	return opts
+}()
+
+// interestOpts is computed once from the static catalog as a flat
+// list (no grouping).
+var interestOpts = func() []selectOption {
+	interests := catalog.AllInterests()
+	opts := make([]selectOption, len(interests))
+	for idx, interest := range interests {
+		opts[idx] = selectOption{Value: interest.String(), Label: interest.Label()}
+	}
+	return opts
 }()

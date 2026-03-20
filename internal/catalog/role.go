@@ -1,68 +1,37 @@
 package catalog
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-// Role identifies a user's role preference.
+// Role identifies a user's role preference. The underlying string
+// is the display label; the wire format is derived.
 //
 //nolint:recvcheck // MarshalText requires value receiver, UnmarshalText requires pointer
-type Role uint8
+type Role string
 
 // Role values.
 const (
-	RoleDominant Role = iota + 1
-	RoleSubmissive
-	RoleSwitch
+	RoleDominant   Role = "Dominant"
+	RoleSubmissive Role = "Submissive"
+	RoleSwitch     Role = "Switch"
 )
 
-var roleStrings = map[Role]string{
-	RoleDominant:   "dominant",
-	RoleSubmissive: "submissive",
-	RoleSwitch:     "switch",
-}
+// Label returns the human-readable label.
+func (r Role) Label() string { return string(r) }
 
-var roleLabels = map[Role]string{
-	RoleDominant:   "Dominant",
-	RoleSubmissive: "Submissive",
-	RoleSwitch:     "Switch",
-}
-
-var roleLookup = func() map[string]Role {
-	lookup := make(map[string]Role, len(roleStrings))
-	for role, str := range roleStrings {
-		lookup[str] = role
-	}
-	return lookup
-}()
-
-func (r Role) String() string {
-	if str, ok := roleStrings[r]; ok {
-		return str
-	}
-	return fmt.Sprintf("Role(%d)", r)
-}
-
-// Label returns the human-readable label for the role.
-func (r Role) Label() string {
-	if label, ok := roleLabels[r]; ok {
-		return label
-	}
-	return r.String()
-}
+// String returns the wire format.
+func (r Role) String() string { return toWire(string(r)) }
 
 // MarshalText implements encoding.TextMarshaler.
 func (r Role) MarshalText() ([]byte, error) {
-	if _, ok := roleStrings[r]; !ok {
-		return nil, fmt.Errorf("invalid role: %d", r)
+	if !roleSet[r] {
+		return nil, fmt.Errorf("invalid role: %q", r)
 	}
 	return []byte(r.String()), nil
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (r *Role) UnmarshalText(text []byte) error {
-	parsed, ok := roleLookup[strings.ToLower(string(text))]
+	parsed, ok := roleLookup[string(text)]
 	if !ok {
 		return fmt.Errorf("unknown role: %q", text)
 	}
@@ -70,10 +39,8 @@ func (r *Role) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// Roles returns all valid Role values in order.
-func Roles() []Role {
-	return []Role{RoleDominant, RoleSubmissive, RoleSwitch}
-}
+// Roles returns all valid Role values in display order.
+func Roles() []Role { return roles }
 
 // RoleMatchesFilter reports whether a user with the given role
 // satisfies a role filter. Filter semantics:
@@ -86,3 +53,12 @@ func RoleMatchesFilter(role, filter Role) bool {
 	}
 	return role == RoleSwitch && (filter == RoleDominant || filter == RoleSubmissive)
 }
+
+var roles = []Role{
+	RoleDominant,
+	RoleSubmissive,
+	RoleSwitch,
+}
+
+var roleSet = buildSet(roles)
+var roleLookup = buildLookup(roles)

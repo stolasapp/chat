@@ -27,10 +27,14 @@ func NewMatchedProfile(partner *match.Profile, myInterests catalog.Set[catalog.I
 	slices.SortFunc(common, byLabel)
 	slices.SortFunc(other, byLabel)
 
-	return MatchedProfile{
+	profile := MatchedProfile{
 		Gender: partner.Gender.Label(),
 		Role:   partner.Role.Label(),
 		Common: common,
 		Other:  other,
 	}
+	if partner.Species != "" && partner.Species != catalog.SpeciesOther {
+		profile.Species = partner.Species.Label()
+	}
+	return profile
 }

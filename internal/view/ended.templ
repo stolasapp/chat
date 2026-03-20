@@ -7,7 +7,7 @@ package view
 templ ChatEnded(message string, showActions bool) {
 	@appendMessage() {
 		<div class="mx-auto text-center space-y-3 py-4">
-			<p class="text-sm text-gray-500 dark:text-gray-400">{ message }</p>
+			<p class="text-sm text-stone-500 dark:text-stone-400">{ message }</p>
 			if showActions {
 				<div class="flex items-center justify-center gap-2">
 					<form ws-send class="inline">
@@ -15,7 +15,7 @@ templ ChatEnded(message string, showActions bool) {
 						<button
 							type="submit"
 							id={ ElementFindAnother }
-							class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+							class="rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500"
 						>
 							Find Another
 						</button>
@@ -26,7 +26,7 @@ templ ChatEnded(message string, showActions bool) {
 						<button
 							type="submit"
 							id={ ElementBlockBtn }
-							class="rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500"
+							class="rounded-md bg-stone-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-500 focus-visible:ring-2 focus-visible:ring-stone-400"
 						>
 							Block &amp; Find Another
 						</button>

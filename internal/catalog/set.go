@@ -46,12 +46,20 @@ func (s Set[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Values())
 }
 
-// UnmarshalJSON decodes a JSON array into the set.
+// UnmarshalJSON decodes a JSON array into the set. Invalid or
+// unrecognized values are silently dropped.
 func (s *Set[T]) UnmarshalJSON(data []byte) error {
-	var vals []T
-	if err := json.Unmarshal(data, &vals); err != nil {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	*s = NewSet(vals...)
+	result := make(Set[T], len(raw))
+	for _, elem := range raw {
+		var val T
+		if err := json.Unmarshal(elem, &val); err == nil {
+			result[val] = struct{}{}
+		}
+	}
+	*s = result
 	return nil
 }

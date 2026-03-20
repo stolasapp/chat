@@ -45,14 +45,14 @@ func ChatEnded(message string, showActions bool) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto text-center space-y-3 py-4\"><p class=\"text-sm text-gray-500 dark:text-gray-400\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto text-center space-y-3 py-4\"><p class=\"text-sm text-stone-500 dark:text-stone-400\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/ended.templ`, Line: 10, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/ended.templ`, Line: 10, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -76,7 +76,7 @@ func ChatEnded(message string, showActions bool) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" class=\"rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500\">Find Another</button></form><form ws-send class=\"inline\"><input type=\"hidden\" name=\"type\" value=\"find_match\"> <input type=\"hidden\" name=\"block\" value=\"true\"> <button type=\"submit\" id=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" class=\"rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500\">Find Another</button></form><form ws-send class=\"inline\"><input type=\"hidden\" name=\"type\" value=\"find_match\"> <input type=\"hidden\" name=\"block\" value=\"true\"> <button type=\"submit\" id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -89,7 +89,7 @@ func ChatEnded(message string, showActions bool) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500\">Block &amp; Find Another</button></form></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"rounded-md bg-stone-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-500 focus-visible:ring-2 focus-visible:ring-stone-400\">Block &amp; Find Another</button></form></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

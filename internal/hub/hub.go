@@ -432,7 +432,7 @@ func (h *Hub) handleFindMatch(ctx context.Context, client *Client, msg FindMatch
 	// Another", the form only sends block; profile fields are
 	// absent. Reuse the existing profile in that case.
 	profile := client.Profile()
-	if msg.Gender != 0 {
+	if msg.Gender != "" {
 		profile = &msg.Profile
 	}
 	if profile == nil {

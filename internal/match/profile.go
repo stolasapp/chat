@@ -3,8 +3,6 @@
 package match
 
 import (
-	"slices"
-
 	"github.com/stolasapp/chat/internal/catalog"
 )
 
@@ -13,6 +11,7 @@ import (
 type Profile struct {
 	Gender           catalog.Gender                `json:"gender"`
 	Role             catalog.Role                  `json:"role"`
+	Species          catalog.Species               `json:"species"`
 	Interests        catalog.Set[catalog.Interest] `json:"interests"`
 	FilterGender     catalog.Set[catalog.Gender]   `json:"filter_gender"`
 	FilterRole       catalog.Set[catalog.Role]     `json:"filter_role"`
@@ -49,7 +48,7 @@ func Compatible(profA, profB *Profile, tokenA, tokenB Token) bool {
 		return false
 	}
 
-	// exclude interests
+	// exclude interests: exact match only
 	if excludeHit(profA.ExcludeInterests, profB.Interests) {
 		return false
 	}
@@ -77,16 +76,10 @@ func roleFilterSatisfied(filters catalog.Set[catalog.Role], role catalog.Role) b
 }
 
 // excludeHit reports whether any excluded interest matches any of
-// the partner's interests. Excluding a category blocks any item
-// under it; excluding an item blocks only that exact item.
+// the partner's interests.
 func excludeHit(excludes, interests catalog.Set[catalog.Interest]) bool {
 	for excl := range excludes {
 		if interests.Contains(excl) {
-			return true
-		}
-		// excluding a category also blocks any item under it
-		if catalog.IsCategory(excl) &&
-			slices.ContainsFunc(catalog.ItemsIn(excl), interests.Contains) {
 			return true
 		}
 	}
@@ -94,12 +87,8 @@ func excludeHit(excludes, interests catalog.Set[catalog.Interest]) bool {
 }
 
 const (
-	// crossLevelDiscount is applied to cross-level interest
-	// matches (category-to-item or item-to-category).
-	crossLevelDiscount = 0.75
-
 	// jaccardDirections is the number of scoring directions
-	// (A->B and B->A) used to normalize the weighted Jaccard.
+	// (A->B and B->A) used to normalize the Jaccard.
 	jaccardDirections = 2.0
 
 	// wildcardScore is the score when either or both users have
@@ -109,24 +98,25 @@ const (
 	wildcardScore = 0.01
 )
 
-// Score computes weighted Jaccard similarity between two profiles'
-// interests. Exact matches (same interest) score 1.0. Cross-level
-// matches (category matched to an item under it, or vice versa)
-// score crossLevelDiscount. If either side has no interests, a
-// small positive wildcard score is returned so they still match.
+// Score computes Jaccard similarity between two profiles'
+// interests. If either side has no interests, a small positive
+// wildcard score is returned so they still match.
 func Score(profA, profB *Profile) float64 {
 	if profA.Interests.Len() == 0 || profB.Interests.Len() == 0 {
 		return wildcardScore
 	}
 
-	// compute best match weight for each of A's interests in B
+	// compute match weight: 1.0 for each exact match
 	weightSum := 0.0
 	for interest := range profA.Interests {
-		weightSum += bestMatch(interest, profB.Interests)
+		if profB.Interests.Contains(interest) {
+			weightSum += 1.0
+		}
 	}
-	// and B's interests in A
 	for interest := range profB.Interests {
-		weightSum += bestMatch(interest, profA.Interests)
+		if profA.Interests.Contains(interest) {
+			weightSum += 1.0
+		}
 	}
 
 	// union = |A| + |B| - |intersection|
@@ -142,33 +132,5 @@ func Score(profA, profB *Profile) float64 {
 		return 0
 	}
 
-	// each interest contributes a match from both directions;
-	// normalize by 2 * union to keep score in [0, 1]
 	return weightSum / (jaccardDirections * float64(unionSize))
-}
-
-// bestMatch finds the best match weight for interest in the
-// partner's set.
-func bestMatch(interest catalog.Interest, partnerSet catalog.Set[catalog.Interest]) float64 {
-	// exact match
-	if partnerSet.Contains(interest) {
-		return 1.0
-	}
-
-	// cross-level: if interest is a category, check if partner
-	// has any item under it
-	if catalog.IsCategory(interest) &&
-		slices.ContainsFunc(catalog.ItemsIn(interest), partnerSet.Contains) {
-		return crossLevelDiscount
-	}
-
-	// cross-level: if interest is an item, check if partner has
-	// its parent category
-	if cat, ok := catalog.CategoryOf(interest); ok {
-		if partnerSet.Contains(cat) {
-			return crossLevelDiscount
-		}
-	}
-
-	return 0
 }

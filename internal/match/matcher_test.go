@@ -20,12 +20,12 @@ func TestMatcher_BasicMatch(t *testing.T) {
 		matcher.Enqueue(t.Context(), "tok-a", &Profile{
 			Gender:    catalog.GenderMale,
 			Role:      catalog.RoleDominant,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 		matcher.Enqueue(t.Context(), "tok-b", &Profile{
 			Gender:    catalog.GenderFemale,
 			Role:      catalog.RoleSubmissive,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 
 		synctest.Wait()
@@ -53,12 +53,12 @@ func TestMatcher_IncompatibleNoMatch(t *testing.T) {
 			Gender:       catalog.GenderMale,
 			Role:         catalog.RoleDominant,
 			FilterGender: catalog.NewSet(catalog.GenderFemale),
-			Interests:    catalog.NewSet(catalog.InterestBasketball),
+			Interests:    catalog.NewSet(catalog.Interest("Basketball")),
 		})
 		matcher.Enqueue(t.Context(), "tok-b", &Profile{
 			Gender:    catalog.GenderMale,
 			Role:      catalog.RoleSubmissive,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 
 		synctest.Wait()
@@ -83,17 +83,17 @@ func TestMatcher_BestPairSelection(t *testing.T) {
 		matcher.Enqueue(t.Context(), "tok-a", &Profile{
 			Gender:    catalog.GenderMale,
 			Role:      catalog.RoleDominant,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 		matcher.Enqueue(t.Context(), "tok-b", &Profile{
 			Gender:    catalog.GenderFemale,
 			Role:      catalog.RoleSubmissive,
-			Interests: catalog.NewSet(catalog.InterestTennis),
+			Interests: catalog.NewSet(catalog.Interest("Tennis")),
 		})
 		matcher.Enqueue(t.Context(), "tok-c", &Profile{
 			Gender:    catalog.GenderFemale,
 			Role:      catalog.RoleSubmissive,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 
 		synctest.Wait()
@@ -120,7 +120,7 @@ func TestMatcher_LeaveRemovesFromQueue(t *testing.T) {
 		matcher.Enqueue(t.Context(), "tok-a", &Profile{
 			Gender:    catalog.GenderMale,
 			Role:      catalog.RoleDominant,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 
 		// wait for A to be processed
@@ -136,7 +136,7 @@ func TestMatcher_LeaveRemovesFromQueue(t *testing.T) {
 		matcher.Enqueue(t.Context(), "tok-b", &Profile{
 			Gender:    catalog.GenderFemale,
 			Role:      catalog.RoleSubmissive,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 
 		synctest.Wait()
@@ -161,12 +161,12 @@ func TestMatcher_TimeoutFallback(t *testing.T) {
 		matcher.Enqueue(t.Context(), "tok-a", &Profile{
 			Gender:    catalog.GenderMale,
 			Role:      catalog.RoleDominant,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 		matcher.Enqueue(t.Context(), "tok-b", &Profile{
 			Gender:    catalog.GenderFemale,
 			Role:      catalog.RoleSubmissive,
-			Interests: catalog.NewSet(catalog.InterestTennis),
+			Interests: catalog.NewSet(catalog.Interest("Tennis")),
 		})
 
 		synctest.Wait()
@@ -204,13 +204,13 @@ func TestMatcher_BlockedPairSkipped(t *testing.T) {
 		matcher.Enqueue(t.Context(), "tok-a", &Profile{
 			Gender:        catalog.GenderMale,
 			Role:          catalog.RoleDominant,
-			Interests:     catalog.NewSet(catalog.InterestBasketball),
+			Interests:     catalog.NewSet(catalog.Interest("Basketball")),
 			BlockedTokens: catalog.NewSet[Token]("tok-b"),
 		})
 		matcher.Enqueue(t.Context(), "tok-b", &Profile{
 			Gender:    catalog.GenderFemale,
 			Role:      catalog.RoleSubmissive,
-			Interests: catalog.NewSet(catalog.InterestBasketball),
+			Interests: catalog.NewSet(catalog.Interest("Basketball")),
 		})
 
 		synctest.Wait()

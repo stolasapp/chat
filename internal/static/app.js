@@ -201,10 +201,10 @@ function updateCharCount(textarea) {
     counter.classList.remove("hidden");
     if (remaining <= 50) {
       counter.classList.add("text-red-500", "dark:text-red-400");
-      counter.classList.remove("text-gray-400", "dark:text-gray-500");
+      counter.classList.remove("text-stone-400", "dark:text-stone-500");
     } else {
       counter.classList.remove("text-red-500", "dark:text-red-400");
-      counter.classList.add("text-gray-400", "dark:text-gray-500");
+      counter.classList.add("text-stone-400", "dark:text-stone-500");
     }
   } else {
     counter.classList.add("hidden");
@@ -224,7 +224,7 @@ function appendOptimisticMessage(text, seq) {
     '<div id="msg-' +
     seq +
     '" class="ml-auto max-w-[75%] break-words hyphens-auto rounded-lg ' +
-    'bg-indigo-600 px-3 py-2 text-sm text-white opacity-50">' +
+    'bg-amber-700 px-3 py-2 text-sm leading-relaxed text-white opacity-50">' +
     tmp.innerHTML +
     "</div>";
   htmx.swap("#" + IDs.messages, html, { swapStyle: "beforeend" });
@@ -234,6 +234,14 @@ function appendOptimisticMessage(text, seq) {
   }
 }
 
+// --- Leave dialog ---
+
+function openLeaveDialog() {
+  const dialog = document.getElementById("leave-dialog");
+  dialog.showModal();
+  const cancel = document.getElementById("leave-cancel");
+  if (cancel !== null) cancel.focus();
+}
 
 // --- Helpers ---
 
@@ -260,11 +268,11 @@ function readFromStorage() {
   }
 }
 
-// --- Interest picker ---
+// --- Searchable picker ---
 
 function initForm(form) {
   form.dataset.initialized = "true";
-  initInterestPickers(form);
+  initSearchablePickers(form);
   restoreForm(form);
 
   form.addEventListener("change", () => {
@@ -275,53 +283,38 @@ function initForm(form) {
   updateFindButton(form);
 }
 
-function initInterestPickers(form) {
-  form.querySelectorAll(".interest-picker").forEach(initPicker);
+function initSearchablePickers(form) {
+  form.querySelectorAll(".searchable-picker").forEach(initPicker);
 }
 
 function initPicker(picker) {
-  const search = picker.querySelector(".interest-search");
-  const groups = picker.querySelectorAll(".interest-group");
+  const search = picker.querySelector(".picker-search");
+  const items = picker.querySelectorAll(".picker-item");
 
   search.addEventListener("input", () => {
     const query = search.value.toLowerCase().trim();
-    groups.forEach((group) => {
-      let anyVisible = false;
-      group.querySelectorAll(".interest-item").forEach((item) => {
-        const matches =
-          query === "" || item.dataset.value.includes(query);
-        item.style.display = matches ? "" : "none";
-        if (matches) anyVisible = true;
-      });
-      group.style.display = anyVisible ? "" : "none";
+    items.forEach((item) => {
+      const matches = query === "" || item.dataset.value.includes(query);
+      item.style.display = matches ? "" : "none";
     });
   });
 
-  picker.querySelectorAll(".interest-group-toggle").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const group = btn.closest(".interest-group");
-      const items = group.querySelector(".interest-group-items");
-      const arrow = btn.querySelector(".interest-group-arrow");
-      const collapsed = items.style.display === "none";
-      items.style.display = collapsed ? "" : "none";
-      arrow.textContent = collapsed ? "\u25BC" : "\u25B6";
+  picker
+    .querySelectorAll('input[type="checkbox"], input[type="radio"]')
+    .forEach((input) => {
+      input.addEventListener("change", () => syncTags(picker));
     });
-  });
-
-  picker.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-    cb.addEventListener("change", () => syncTags(picker));
-  });
 }
 
 function syncTags(picker) {
-  const container = picker.querySelector(".interest-tags");
+  const container = picker.querySelector(".picker-tags");
 
   while (container.firstChild) {
     container.removeChild(container.firstChild);
   }
 
   const checked = picker.querySelectorAll(
-    'input[type="checkbox"]:checked',
+    'input[type="checkbox"]:checked, input[type="radio"]:checked',
   );
 
   if (checked.length === 0) {
@@ -335,23 +328,27 @@ function syncTags(picker) {
   checked.forEach((cb) => {
     const tag = document.createElement("span");
     tag.className =
-      "inline-flex items-center gap-0.5 rounded-full bg-indigo-100 " +
-      "dark:bg-indigo-900 px-2 py-0.5 text-xs font-medium " +
-      "text-indigo-700 dark:text-indigo-300";
-    tag.textContent = cb.value;
+      "inline-flex items-center gap-0.5 rounded-full bg-amber-100 " +
+      "dark:bg-amber-900 px-2 py-0.5 text-xs font-medium " +
+      "text-amber-700 dark:text-amber-300";
+    const parentLabel = cb.closest("label");
+    tag.textContent =
+      parentLabel !== null ? parentLabel.textContent.trim() : cb.value;
 
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className =
-      "ml-0.5 text-indigo-500 hover:text-indigo-700 " +
-      "dark:hover:text-indigo-100 text-sm leading-none";
-    remove.textContent = "\u00D7";
-    remove.addEventListener("click", () => {
-      cb.checked = false;
-      cb.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    if (cb.type === "checkbox") {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className =
+        "ml-0.5 text-amber-500 hover:text-amber-700 " +
+        "dark:hover:text-amber-100 text-sm leading-none";
+      remove.textContent = "\u00D7";
+      remove.addEventListener("click", () => {
+        cb.checked = false;
+        cb.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      tag.appendChild(remove);
+    }
 
-    tag.appendChild(remove);
     container.appendChild(tag);
   });
 }
@@ -363,6 +360,7 @@ function readForm(form) {
   return {
     gender: data.get("gender") || "",
     role: data.get("role") || "",
+    species: data.get("species") || "",
     interests: data.getAll("interests"),
     filter_gender: data.getAll("filter_gender"),
     filter_role: data.getAll("filter_role"),
@@ -377,29 +375,46 @@ function saveForm(form) {
 
 function restoreForm(form) {
   const raw = sessionStorage.getItem(STORAGE_KEY);
-  if (raw === null) return;
+  if (raw !== null) {
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = {};
+    }
 
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return;
+    setSelect(form, "gender", data.gender);
+    setSelect(form, "role", data.role);
+    setRadio(form, "species", data.species || "");
+    setCheckboxes(form, "interests", data.interests || []);
+    setCheckboxes(form, "filter_gender", data.filter_gender || []);
+    setCheckboxes(form, "filter_role", data.filter_role || []);
+    setCheckboxes(form, "exclude_interests", data.exclude_interests || []);
   }
 
-  setSelect(form, "gender", data.gender);
-  setSelect(form, "role", data.role);
-  setCheckboxes(form, "interests", data.interests || []);
-  setCheckboxes(form, "filter_gender", data.filter_gender || []);
-  setCheckboxes(form, "filter_role", data.filter_role || []);
-  setCheckboxes(form, "exclude_interests", data.exclude_interests || []);
+  // default species to "other" if nothing selected
+  const speciesSelected = form.querySelector(
+    'input[type="radio"][name="species"]:checked',
+  );
+  if (speciesSelected === null) {
+    setRadio(form, "species", "other");
+  }
 
-  form.querySelectorAll(".interest-picker").forEach(syncTags);
+  form.querySelectorAll(".searchable-picker").forEach(syncTags);
 }
 
 function setSelect(form, name, value) {
   if (value === undefined) return;
   const el = form.querySelector(`select[name="${name}"]`);
   if (el !== null) el.value = value;
+}
+
+function setRadio(form, name, value) {
+  if (value === "") return;
+  const el = form.querySelector(
+    `input[type="radio"][name="${name}"][value="${value}"]`,
+  );
+  if (el !== null) el.checked = true;
 }
 
 function setCheckboxes(form, name, values) {

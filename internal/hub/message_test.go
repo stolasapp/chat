@@ -120,7 +120,7 @@ func TestEnvelope_Parse(t *testing.T) {
 					"interests": ["basketball", "tennis"],
 					"filter_gender": ["male"],
 					"filter_role": ["dominant"],
-					"exclude_interests": ["team-sports"]
+					"exclude_interests": ["golf"]
 				}`),
 			},
 		},
@@ -232,10 +232,11 @@ func TestEnvelope_Parse_FindMatchRoundTrip(t *testing.T) {
 		Payload: json.RawMessage(`{
 			"gender": "female",
 			"role": "switch",
-			"interests": ["basketball", "team-sports"],
-			"filter_gender": ["male", "nonbinary"],
+			"species": "wolf",
+			"interests": ["basketball", "tennis"],
+			"filter_gender": ["male", "non_binary"],
 			"filter_role": ["dominant"],
-			"exclude_interests": ["individual-sports"]
+			"exclude_interests": ["golf"]
 		}`),
 	}
 
@@ -247,13 +248,14 @@ func TestEnvelope_Parse_FindMatchRoundTrip(t *testing.T) {
 
 	assert.Equal(t, catalog.GenderFemale, findMatch.Gender)
 	assert.Equal(t, catalog.RoleSwitch, findMatch.Role)
-	assert.True(t, findMatch.Interests.Contains(catalog.InterestBasketball))
-	assert.True(t, findMatch.Interests.Contains(catalog.InterestTeamSports))
+	assert.Equal(t, catalog.Species("Wolf"), findMatch.Species)
+	assert.True(t, findMatch.Interests.Contains(catalog.Interest("Basketball")))
+	assert.True(t, findMatch.Interests.Contains(catalog.Interest("Tennis")))
 	assert.Equal(t, 2, findMatch.Interests.Len())
 	assert.True(t, findMatch.FilterGender.Contains(catalog.GenderMale))
 	assert.True(t, findMatch.FilterGender.Contains(catalog.GenderNonBinary))
 	assert.True(t, findMatch.FilterRole.Contains(catalog.RoleDominant))
-	assert.True(t, findMatch.ExcludeInterests.Contains(catalog.InterestIndividualSports))
+	assert.True(t, findMatch.ExcludeInterests.Contains(catalog.Interest("Golf")))
 }
 
 func TestFindMatchMessage_BlockFieldParsing(t *testing.T) {

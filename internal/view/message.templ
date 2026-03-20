@@ -13,13 +13,13 @@ templ ChatMessage(text string, self bool, seq int) {
 	}
 	if self {
 		@appendMessage() {
-			<div class="ml-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">
+			<div class="ml-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-amber-700 px-3 py-2 text-sm leading-relaxed text-white">
 				@linkifyMessage(text, self)
 			</div>
 		}
 	} else {
 		@appendMessage() {
-			<div class="mr-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-gray-200 dark:bg-gray-700 px-3 py-2 text-sm">
+			<div class="mr-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-stone-200 dark:bg-stone-700 px-3 py-2 text-sm leading-relaxed">
 				@linkifyMessage(text, self)
 			</div>
 		}

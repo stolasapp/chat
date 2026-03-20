@@ -79,8 +79,8 @@ func TestLinkifyHTML_SelfStyling(t *testing.T) {
 	selfResult := linkPolicy.Sanitize(linkifyHTML("https://example.com", true))
 	otherResult := linkPolicy.Sanitize(linkifyHTML("https://example.com", false))
 
-	assert.Contains(t, selfResult, "text-indigo-200")
-	assert.Contains(t, otherResult, "text-indigo-600")
+	assert.Contains(t, selfResult, "text-amber-200")
+	assert.Contains(t, otherResult, "text-amber-700")
 }
 
 func TestLinkifyHTML_MultipleURLs(t *testing.T) {

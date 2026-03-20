@@ -47,7 +47,7 @@ func ChatView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" hx-swap-oob=\"true\" class=\"h-full flex flex-col max-w-2xl mx-auto p-4 pb-6 overflow-hidden\"><div class=\"flex items-center justify-between py-2\"><div class=\"flex items-center gap-2\"><h2 class=\"text-lg font-semibold\">Chat</h2>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" hx-swap-oob=\"true\" class=\"h-full flex flex-col max-w-2xl mx-auto p-4 pb-6 overflow-hidden\"><header class=\"flex items-center justify-between py-2\"><div class=\"flex items-center gap-2\"><img src=\"/static/fox.svg\" alt=\"\" class=\"h-5 w-5\"><h2 class=\"text-base font-medium\">Stolas</h2>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -55,14 +55,14 @@ func ChatView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div><label for=\"settings-toggle\" class=\"cursor-pointer rounded-md bg-gray-200 dark:bg-gray-700 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-gray-300 dark:hover:bg-gray-600 select-none\">Settings</label></div><!-- Hidden checkbox drives the panel visibility via CSS --><input type=\"checkbox\" id=\"settings-toggle\" class=\"peer hidden\"><!-- Settings panel: when open, takes all remaining space --><div class=\"hidden peer-checked:flex flex-1 min-h-0 flex-col bg-white dark:bg-gray-800 shadow rounded-lg p-4 overflow-y-auto\"><form id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div><label for=\"settings-toggle\" tabindex=\"0\" role=\"button\" onkeydown=\"if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}\" class=\"cursor-pointer rounded-md bg-stone-200 dark:bg-stone-700 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-stone-300 dark:hover:bg-stone-600 focus-visible:ring-2 focus-visible:ring-amber-500 select-none\">Settings</label></header><!-- Hidden checkbox drives the panel visibility via CSS --><input type=\"checkbox\" id=\"settings-toggle\" class=\"peer hidden\" aria-hidden=\"true\"><!-- Settings panel: when open, takes all remaining space --><div class=\"hidden peer-checked:flex flex-1 min-h-0 flex-col bg-white dark:bg-stone-800 shadow rounded-lg p-4 overflow-y-auto\"><form id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(ElementProfileForm)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 26, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 30, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
@@ -76,7 +76,7 @@ func ChatView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<hr class=\"border-gray-200 dark:border-gray-700\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<hr class=\"border-stone-200 dark:border-stone-700\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -91,13 +91,13 @@ func ChatView() templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(ElementMessages)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 36, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 40, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"absolute inset-0 overflow-y-auto space-y-2 rounded-lg bg-white dark:bg-gray-800 p-4 shadow\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" role=\"log\" aria-live=\"polite\" aria-label=\"Chat messages\" class=\"absolute inset-0 overflow-y-auto space-y-2 rounded-lg bg-white dark:bg-stone-800 p-4 shadow\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -112,7 +112,7 @@ func ChatView() templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(ElementChatForm)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 43, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 50, Col: 29}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -125,39 +125,39 @@ func ChatView() templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(ElementMessageInput)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 48, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 55, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" autocomplete=\"off\" maxlength=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" aria-label=\"Message text\" autocomplete=\"off\" maxlength=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(MaxMessageLength))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 50, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 58, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" rows=\"1\" placeholder=\"Type a message...\" class=\"block w-full max-h-[50vh] resize-none overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 pr-16 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500\" oninput=\"this.style.height='auto';this.style.height=this.scrollHeight+'px';updateCharCount(this)\" onkeydown=\"if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit()}\"></textarea> <span id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" rows=\"1\" placeholder=\"Type a message...\" class=\"block w-full max-h-[50vh] resize-none overflow-y-auto rounded-md border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-700 px-3 py-2 pr-16 text-sm shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500\" oninput=\"this.style.height='auto';this.style.height=this.scrollHeight+'px';updateCharCount(this)\" onkeydown=\"if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit()}\"></textarea> <span id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(ElementCharCount)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 58, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 66, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" class=\"absolute bottom-1.5 right-2 text-xs text-gray-400 dark:text-gray-500 pointer-events-none hidden\"></span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" class=\"absolute bottom-1.5 right-2 text-xs text-stone-400 dark:text-stone-500 pointer-events-none hidden\"></span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -165,7 +165,7 @@ func ChatView() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</form><button type=\"button\" onclick=\"document.getElementById('leave-dialog').showModal()\" class=\"rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500\">Leave</button></div><dialog id=\"leave-dialog\" class=\"rounded-md bg-white dark:bg-gray-800 p-6 shadow-xl backdrop:bg-black/50 max-w-sm w-full\"><p class=\"text-sm text-gray-700 dark:text-gray-300\">Are you sure you want to leave the chat?</p><div class=\"mt-4 flex justify-end gap-2\"><button type=\"button\" onclick=\"document.getElementById('leave-dialog').close()\" class=\"rounded-md bg-gray-200 dark:bg-gray-700 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-gray-300 dark:hover:bg-gray-600\">Cancel</button><form ws-send class=\"inline\"><input type=\"hidden\" name=\"type\" value=\"leave\"> <button type=\"submit\" onclick=\"document.getElementById('leave-dialog').close()\" class=\"rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500\">Leave</button></form></div></dialog></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</form><button type=\"button\" onclick=\"openLeaveDialog()\" class=\"rounded-md border border-stone-300 dark:border-stone-600 px-4 py-2 text-sm font-semibold text-stone-500 dark:text-stone-400 hover:border-stone-400 hover:text-stone-700 dark:hover:border-stone-500 dark:hover:text-stone-200 focus-visible:ring-2 focus-visible:ring-amber-500\">Leave</button></div><dialog id=\"leave-dialog\" role=\"alertdialog\" aria-labelledby=\"leave-dialog-desc\" class=\"rounded-md bg-white dark:bg-stone-800 p-6 shadow-xl backdrop:bg-black/50 max-w-sm w-full\"><p id=\"leave-dialog-desc\" class=\"text-sm text-stone-700 dark:text-stone-300\">Are you sure you want to leave the chat?</p><div class=\"mt-4 flex justify-end gap-2\"><button id=\"leave-cancel\" type=\"button\" autofocus onclick=\"document.getElementById('leave-dialog').close()\" class=\"rounded-md bg-stone-200 dark:bg-stone-700 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-stone-300 dark:hover:bg-stone-600 focus-visible:ring-2 focus-visible:ring-amber-500\">Cancel</button><form ws-send class=\"inline\"><input type=\"hidden\" name=\"type\" value=\"leave\"> <button type=\"submit\" onclick=\"document.getElementById('leave-dialog').close()\" class=\"rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:ring-2 focus-visible:ring-red-500\">Leave</button></form></div></dialog></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -203,20 +203,20 @@ func ClientCount(count int) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(ElementClientCount)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 106, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 118, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" hx-swap-oob=\"true\" class=\"inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs text-gray-500 dark:text-gray-400\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" hx-swap-oob=\"true\" class=\"inline-flex items-center rounded-full bg-stone-100 dark:bg-stone-700 px-2 py-0.5 text-xs text-stone-500 dark:text-stone-400\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 110, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 122, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -261,7 +261,7 @@ func TypingIndicator(active bool) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(ElementTyping)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 119, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 131, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -272,17 +272,17 @@ func TypingIndicator(active bool) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if active {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-4 py-1.5 z-10\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-stone-800/80 backdrop-blur-sm px-4 py-1.5 z-10\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-4 py-1.5 z-10 hidden\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-stone-800/80 backdrop-blur-sm px-4 py-1.5 z-10 hidden\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "><span class=\"inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400\"><span class=\"flex gap-0.5\"><span class=\"animate-bounce [animation-delay:0ms] w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500\"></span> <span class=\"animate-bounce [animation-delay:150ms] w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500\"></span> <span class=\"animate-bounce [animation-delay:300ms] w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500\"></span></span> Partner is typing</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "><span class=\"inline-flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400\"><span class=\"flex gap-0.5\"><span class=\"motion-safe:animate-bounce [animation-delay:0ms] w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500\"></span> <span class=\"motion-safe:animate-bounce [animation-delay:150ms] w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500\"></span> <span class=\"motion-safe:animate-bounce [animation-delay:300ms] w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500\"></span></span> Partner is typing</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -321,7 +321,7 @@ func ReconnectingIndicator(active bool) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(ElementTyping)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 143, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 155, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -332,17 +332,17 @@ func ReconnectingIndicator(active bool) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if active {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-4 py-1.5 z-10\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-stone-800/80 backdrop-blur-sm px-4 py-1.5 z-10\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-4 py-1.5 z-10 hidden\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " class=\"absolute bottom-0 left-0 right-0 rounded-b-lg bg-white/80 dark:bg-stone-800/80 backdrop-blur-sm px-4 py-1.5 z-10 hidden\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "><span class=\"inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400\"><span class=\"flex gap-0.5\"><span class=\"animate-bounce [animation-delay:0ms] w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500\"></span> <span class=\"animate-bounce [animation-delay:150ms] w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500\"></span> <span class=\"animate-bounce [animation-delay:300ms] w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500\"></span></span> Partner reconnecting</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "><span class=\"inline-flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400\"><span class=\"flex gap-0.5\"><span class=\"motion-safe:animate-bounce [animation-delay:0ms] w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500\"></span> <span class=\"motion-safe:animate-bounce [animation-delay:150ms] w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500\"></span> <span class=\"motion-safe:animate-bounce [animation-delay:300ms] w-1 h-1 rounded-full bg-stone-400 dark:bg-stone-500\"></span></span> Partner reconnecting</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -381,7 +381,7 @@ func SendButton(enabled bool) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(ElementSendButton)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 167, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 179, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -398,12 +398,12 @@ func SendButton(enabled bool) templ.Component {
 			}
 		}
 		if enabled {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, " class=\"rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, " class=\"rounded-md border border-transparent bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, " class=\"rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm opacity-50 cursor-not-allowed\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, " class=\"rounded-md border border-transparent bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-sm opacity-50 cursor-not-allowed\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

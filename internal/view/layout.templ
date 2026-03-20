@@ -7,19 +7,117 @@ templ Layout(title string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title }</title>
+			<link rel="icon" href="/static/fox.svg" type="image/svg+xml"/>
 			<script src="https://cdn.tailwindcss.com"></script>
 			<script>
 				tailwind.config = {
 					darkMode: 'media',
+					theme: {
+						extend: {
+							fontFamily: {
+								sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+							},
+						},
+					},
 				};
 			</script>
 			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
 			<script src="https://unpkg.com/htmx-ext-ws@2.0.3/ws.js" integrity="sha384-IeVkDiDIU+Zsabm4HnVf7ifa7LYLSoUCAYrFIjsn+0voIDaflLAalBqJ4CeEZodl" crossorigin="anonymous"></script>
 			<script src="https://unpkg.com/htmx-ext-class-tools@2.0.1/class-tools.js" integrity="sha384-0v0tuTnrShh64XAhOtKRPY4PLiSWLSmdhmZ9Y1wCbiX5SqdXBfiwcCBM6mMVbjrc" crossorigin="anonymous" defer></script>
+			<style>
+				/* Custom checkbox styling */
+				input[type="checkbox"]:not(.hidden) {
+					-webkit-appearance: none;
+					appearance: none;
+					width: 1rem;
+					height: 1rem;
+					border: 1.5px solid #a8a29e;
+					border-radius: 0.25rem;
+					flex-shrink: 0;
+					cursor: pointer;
+					display: grid;
+					place-content: center;
+					background-color: transparent;
+				}
+				input[type="checkbox"]::before {
+					content: "";
+					width: 0.625rem;
+					height: 0.625rem;
+					transform: scale(0);
+					transition: transform 100ms ease-in-out;
+					clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+					background-color: white;
+				}
+				input[type="checkbox"]:checked {
+					background-color: #b45309;
+					border-color: #b45309;
+				}
+				input[type="checkbox"]:checked::before {
+					transform: scale(1);
+				}
+				input[type="checkbox"]:focus-visible {
+					outline: 2px solid #f59e0b;
+					outline-offset: 2px;
+				}
+				@media (prefers-color-scheme: dark) {
+					input[type="checkbox"] {
+						border-color: #78716c;
+					}
+				}
+				/* Custom radio button styling */
+				input[type="radio"] {
+					-webkit-appearance: none;
+					appearance: none;
+					width: 1rem;
+					height: 1rem;
+					border: 1.5px solid #a8a29e;
+					border-radius: 50%;
+					flex-shrink: 0;
+					cursor: pointer;
+					display: grid;
+					place-content: center;
+					background-color: transparent;
+				}
+				input[type="radio"]::before {
+					content: "";
+					width: 0.5rem;
+					height: 0.5rem;
+					border-radius: 50%;
+					transform: scale(0);
+					transition: transform 100ms ease-in-out;
+					background-color: white;
+				}
+				input[type="radio"]:checked {
+					background-color: #b45309;
+					border-color: #b45309;
+				}
+				input[type="radio"]:checked::before {
+					transform: scale(1);
+				}
+				input[type="radio"]:focus-visible {
+					outline: 2px solid #f59e0b;
+					outline-offset: 2px;
+				}
+				@media (prefers-color-scheme: dark) {
+					input[type="radio"] {
+						border-color: #78716c;
+					}
+				}
+				/* Custom select arrow */
+				select {
+					-webkit-appearance: none;
+					appearance: none;
+					background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2378716c'%3E%3Cpath fill-rule='evenodd' d='M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+					background-position: right 0.5rem center;
+					background-repeat: no-repeat;
+					background-size: 1.25rem;
+					padding-right: 2rem;
+				}
+			</style>
 			@elementIDs()
 			<script src="/static/app.js" defer></script>
 		</head>
-		<body class="h-full bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+		<body class="h-full bg-stone-50 text-stone-900 dark:bg-stone-900 dark:text-stone-100">
 			{ children... }
 		</body>
 	</html>

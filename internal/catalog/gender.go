@@ -1,77 +1,40 @@
 package catalog
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-// Gender identifies a user's gender.
+// Gender identifies a user's gender. The underlying string is the
+// display label; the wire format is derived.
 //
 //nolint:recvcheck // MarshalText requires value receiver, UnmarshalText requires pointer
-type Gender uint8
+type Gender string
 
 // Gender values.
 const (
-	GenderMale Gender = iota + 1
-	GenderFemale
-	GenderFluid
-	GenderNonBinary
-	GenderAgender
-	GenderOther
+	GenderMale      Gender = "Male"
+	GenderFemale    Gender = "Female"
+	GenderFluid     Gender = "Gender Fluid"
+	GenderNonBinary Gender = "Non-Binary"
+	GenderAgender   Gender = "Agender"
+	GenderOther     Gender = "Other"
 )
 
-var genderStrings = map[Gender]string{
-	GenderMale:      "male",
-	GenderFemale:    "female",
-	GenderFluid:     "gender-fluid",
-	GenderNonBinary: "nonbinary",
-	GenderAgender:   "agender",
-	GenderOther:     "other",
-}
+// Label returns the human-readable label.
+func (g Gender) Label() string { return string(g) }
 
-var genderLabels = map[Gender]string{
-	GenderMale:      "Male",
-	GenderFemale:    "Female",
-	GenderFluid:     "Gender Fluid",
-	GenderNonBinary: "Non-Binary",
-	GenderAgender:   "Agender",
-	GenderOther:     "Other",
-}
-
-var genderLookup = func() map[string]Gender {
-	lookup := make(map[string]Gender, len(genderStrings))
-	for gender, str := range genderStrings {
-		lookup[str] = gender
-	}
-	return lookup
-}()
-
-func (g Gender) String() string {
-	if str, ok := genderStrings[g]; ok {
-		return str
-	}
-	return fmt.Sprintf("Gender(%d)", g)
-}
-
-// Label returns the human-readable label for the gender.
-func (g Gender) Label() string {
-	if label, ok := genderLabels[g]; ok {
-		return label
-	}
-	return g.String()
-}
+// String returns the wire format.
+func (g Gender) String() string { return toWire(string(g)) }
 
 // MarshalText implements encoding.TextMarshaler.
 func (g Gender) MarshalText() ([]byte, error) {
-	if _, ok := genderStrings[g]; !ok {
-		return nil, fmt.Errorf("invalid gender: %d", g)
+	if !genderSet[g] {
+		return nil, fmt.Errorf("invalid gender: %q", g)
 	}
 	return []byte(g.String()), nil
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (g *Gender) UnmarshalText(text []byte) error {
-	parsed, ok := genderLookup[strings.ToLower(string(text))]
+	parsed, ok := genderLookup[string(text)]
 	if !ok {
 		return fmt.Errorf("unknown gender: %q", text)
 	}
@@ -79,10 +42,17 @@ func (g *Gender) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// Genders returns all valid Gender values in order.
-func Genders() []Gender {
-	return []Gender{
-		GenderMale, GenderFemale, GenderFluid,
-		GenderNonBinary, GenderAgender, GenderOther,
-	}
+// Genders returns all valid Gender values in display order.
+func Genders() []Gender { return genders }
+
+var genders = []Gender{
+	GenderMale,
+	GenderFemale,
+	GenderFluid,
+	GenderNonBinary,
+	GenderAgender,
+	GenderOther,
 }
+
+var genderSet = buildSet(genders)
+var genderLookup = buildLookup(genders)

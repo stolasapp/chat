@@ -18,8 +18,8 @@ var urlPattern = xurls.Strict()
 // allowedLinkClasses restricts the class attribute on <a> tags
 // to only classes we generate. Prevents user-injected classes.
 var allowedLinkClasses = regexp.MustCompile(
-	`^(underline|text-indigo-[\w-]+|hover:text-[\w-]+|dark:text-indigo-[\w-]+|dark:hover:text-[\w-]+)` +
-		`(\s+(underline|text-indigo-[\w-]+|hover:text-[\w-]+|dark:text-indigo-[\w-]+|dark:hover:text-[\w-]+))*$`,
+	`^(underline|text-amber-[\w-]+|hover:text-[\w-]+|dark:text-amber-[\w-]+|dark:hover:text-[\w-]+)` +
+		`(\s+(underline|text-amber-[\w-]+|hover:text-[\w-]+|dark:text-amber-[\w-]+|dark:hover:text-[\w-]+))*$`,
 )
 
 // linkPolicy sanitizes linkified HTML, allowing only <a> with
@@ -56,10 +56,10 @@ func linkifyHTML(text string, self bool) string {
 		return html.EscapeString(text)
 	}
 
-	linkClass := "underline text-indigo-600 hover:text-indigo-800" +
-		" dark:text-indigo-400 dark:hover:text-indigo-200"
+	linkClass := "underline text-amber-700 hover:text-amber-900" +
+		" dark:text-amber-400 dark:hover:text-amber-200"
 	if self {
-		linkClass = "underline text-indigo-200 hover:text-white"
+		linkClass = "underline text-amber-200 hover:text-white"
 	}
 
 	var buf strings.Builder
