@@ -7,7 +7,7 @@ import "github.com/stolasapp/chat/internal/catalog"
 // displayed first in bold.
 templ MatchedNotify(partner MatchedProfile) {
 	@appendMessage() {
-		<div class="mx-auto text-center text-sm text-stone-500 dark:text-stone-400 py-3 space-y-1">
+		<div data-notify="match" class="mx-auto text-center text-sm text-stone-500 dark:text-stone-400 py-3 space-y-1">
 			<p>
 				You've connected with
 				a <span class="font-semibold text-stone-700 dark:text-stone-200">{ partner.Role }</span>

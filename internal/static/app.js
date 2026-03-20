@@ -40,6 +40,8 @@ document.addEventListener("htmx:oobAfterSwap", () => {
     input.dataset.typingBound = "true";
     input.addEventListener("input", onMessageInput);
   }
+
+  processNotifications();
 });
 
 // --- WebSocket lifecycle ---
@@ -432,3 +434,93 @@ function updateFindButton(form) {
   if (btn === null) return;
   btn.disabled = !data.get("gender") || !data.get("role");
 }
+
+// --- Notifications ---
+
+const NOTIFY_KEY = "notifications_enabled";
+
+function isNotifyEnabled() {
+  const toggle = document.getElementById("notify-enabled");
+  if (toggle !== null) return toggle.checked;
+  return localStorage.getItem(NOTIFY_KEY) !== "false";
+}
+
+const notifyMessages = {
+  match: "You've been matched",
+  message: "New message received",
+  ended: "Your chat has ended",
+};
+
+// audioCtx is created lazily on first notification to comply
+// with browser autoplay policies (requires prior user gesture).
+let audioCtx = null;
+
+function playNotificationSound() {
+  if (audioCtx === null) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  const now = audioCtx.currentTime;
+  const oscillator = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  oscillator.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(784, now); // G5
+  oscillator.frequency.setValueAtTime(988, now + 0.08); // B5
+
+  gain.gain.setValueAtTime(0.08, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+  oscillator.start(now);
+  oscillator.stop(now + 0.25);
+}
+
+function showBrowserNotification(body) {
+  if (!("Notification" in window)) return;
+
+  if (Notification.permission === "default") {
+    Notification.requestPermission();
+    return;
+  }
+  if (Notification.permission !== "granted") return;
+
+  new Notification("Stolas Chat", {
+    body: body,
+    icon: "/static/fox.svg",
+  });
+}
+
+function processNotifications() {
+  const elements = document.querySelectorAll("[data-notify]");
+  elements.forEach((element) => {
+    const kind = element.dataset.notify;
+    element.removeAttribute("data-notify");
+
+    if (!document.hidden || !isNotifyEnabled()) return;
+
+    const body = notifyMessages[kind];
+    if (body === undefined) return;
+
+    playNotificationSound();
+    showBrowserNotification(body);
+  });
+}
+
+// Persist notification toggle to localStorage.
+document.addEventListener("change", (event) => {
+  if (event.target.id !== "notify-enabled") return;
+  localStorage.setItem(NOTIFY_KEY, event.target.checked);
+});
+
+// Restore notification toggle from localStorage on form init.
+document.addEventListener("htmx:oobAfterSwap", () => {
+  const toggle = document.getElementById("notify-enabled");
+  if (toggle !== null && !toggle.dataset.restored) {
+    toggle.dataset.restored = "true";
+    const stored = localStorage.getItem(NOTIFY_KEY);
+    if (stored !== null) {
+      toggle.checked = stored !== "false";
+    }
+  }
+});

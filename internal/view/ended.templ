@@ -6,7 +6,7 @@ package view
 // via OOB swap.
 templ ChatEnded(message string, showActions bool) {
 	@appendMessage() {
-		<div class="mx-auto text-center space-y-3 py-4">
+		<div data-notify="ended" class="mx-auto text-center space-y-3 py-4">
 			<p class="text-sm text-stone-500 dark:text-stone-400">{ message }</p>
 			if showActions {
 				<div class="flex items-center justify-center gap-2">

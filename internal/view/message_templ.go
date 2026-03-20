@@ -99,7 +99,7 @@ func ChatMessage(text string, self bool, seq int) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"mr-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-stone-200 dark:bg-stone-700 px-3 py-2 text-sm leading-relaxed\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div data-notify=\"message\" class=\"mr-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-stone-200 dark:bg-stone-700 px-3 py-2 text-sm leading-relaxed\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

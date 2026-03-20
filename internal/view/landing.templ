@@ -39,6 +39,8 @@ templ LandingContent() {
 				@aboutYouSection()
 				<hr class="border-stone-200 dark:border-stone-700"/>
 				@lookingForSection()
+				<hr class="border-stone-200 dark:border-stone-700"/>
+				@notificationToggle()
 				<button
 					type="submit"
 					id={ ElementFindMatchBtn }
@@ -75,6 +77,20 @@ templ lookingForSection() {
 			@searchablePicker("exclude_interests", "Exclude Interests", interestOpts, true)
 		</div>
 	</fieldset>
+}
+
+templ notificationToggle() {
+	<label id="notify-toggle" class="flex items-center justify-between cursor-pointer select-none min-h-[44px]">
+		<div>
+			<span class="text-sm font-medium">Notifications</span>
+			<p class="text-xs text-stone-500 dark:text-stone-400">Sound and browser alerts when the tab is in the background</p>
+		</div>
+		<div class="relative ml-4 flex-shrink-0">
+			<input type="checkbox" id="notify-enabled" class="peer sr-only" checked/>
+			<div class="h-6 w-11 rounded-full bg-stone-300 dark:bg-stone-600 peer-checked:bg-amber-700 transition-colors"></div>
+			<div class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"></div>
+		</div>
+	</label>
 }
 
 templ selectGroup(name string, label string, options []selectOption) {

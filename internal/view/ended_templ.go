@@ -45,7 +45,7 @@ func ChatEnded(message string, showActions bool) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto text-center space-y-3 py-4\"><p class=\"text-sm text-stone-500 dark:text-stone-400\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div data-notify=\"ended\" class=\"mx-auto text-center space-y-3 py-4\"><p class=\"text-sm text-stone-500 dark:text-stone-400\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

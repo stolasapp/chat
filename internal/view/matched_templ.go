@@ -46,7 +46,7 @@ func MatchedNotify(partner MatchedProfile) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto text-center text-sm text-stone-500 dark:text-stone-400 py-3 space-y-1\"><p>You've connected with a <span class=\"font-semibold text-stone-700 dark:text-stone-200\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div data-notify=\"match\" class=\"mx-auto text-center text-sm text-stone-500 dark:text-stone-400 py-3 space-y-1\"><p>You've connected with a <span class=\"font-semibold text-stone-700 dark:text-stone-200\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
