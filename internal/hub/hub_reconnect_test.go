@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stolasapp/chat/internal/match"
 	"github.com/stolasapp/chat/internal/view"
 )
 
@@ -391,6 +393,71 @@ func TestHub_StaleReconnectShowsReset(t *testing.T) {
 	// the second contains both the reset message and action buttons
 	assert.True(t, coll.waitFor(view.MsgServerReset, 2*time.Second),
 		"stale reconnect should see server reset message with action buttons")
+}
+
+// TestHub_StaleReconnectNotifyIgnored verifies that
+// handleReconnectNotify discards events for clients that have
+// already reattached. This prevents a permanently visible
+// "reconnecting" indicator when the notify timer fires after
+// the client has reconnected.
+func TestHub_StaleReconnectNotifyIgnored(t *testing.T) {
+	t.Parallel()
+
+	wsHub := testHub()
+	go wsHub.Run(t.Context())
+
+	srv := simpleHandler(wsHub)
+	defer srv.Close()
+
+	connA, connB, collB, tokenA, _ := matchTwoWithTokens(t, wsHub, srv)
+	defer func() { _ = connB.Close() }()
+
+	// A disconnects and reconnects within the notify delay
+	_ = connA.Close()
+	time.Sleep(50 * time.Millisecond)
+	connA2, _ := dialHubReconnect(t, srv, tokenA)
+	defer func() { _ = connA2.Close() }()
+	collA2 := newCollector(t, connA2)
+	require.True(t, collA2.waitFor("Reconnected", 3*time.Second))
+
+	// push a stale notify directly into the hub's channel;
+	// this simulates the timer firing after the client
+	// reattached (the race that's hard to hit via timing)
+	client := wsHub.ClientByToken(match.Token(tokenA))
+	require.NotNil(t, client)
+	wsHub.reconnectNotify <- client
+
+	// give the hub time to process the stale event
+	time.Sleep(100 * time.Millisecond)
+
+	// A sends a message as a sentinel to bound B's read loop
+	sendJSON(t, connA2, MessageTypeMessage, map[string]any{"text": "sentinel"})
+
+	// read B's messages until the sentinel, checking whether
+	// an active (non-hidden) reconnecting indicator leaked
+	// through from the stale notify
+	deadline := time.After(3 * time.Second)
+	sawActiveIndicator := false
+	for {
+		select {
+		case msg, ok := <-collB.msgs:
+			if !ok {
+				t.Fatal("connection closed before sentinel")
+			}
+			if strings.Contains(msg, "sentinel") {
+				goto done
+			}
+			if strings.Contains(msg, "Partner reconnecting") &&
+				!strings.Contains(msg, "hidden") {
+				sawActiveIndicator = true
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for sentinel")
+		}
+	}
+done:
+	assert.False(t, sawActiveIndicator,
+		"stale notify should not show active reconnecting indicator")
 }
 
 func TestHub_LandingPageRefreshGetsFreshIdentity(t *testing.T) {

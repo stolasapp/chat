@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/a-h/templ"
@@ -22,7 +24,11 @@ const (
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10 //nolint:mnd // 90% of pongWait
 	maxMessageSize = 4096
-	sendBufSize    = 256
+	// sendBufSize is the per-client message buffer. Messages
+	// accumulate here during disconnects and are drained by
+	// Attach on reconnect. 64 slots covers several seconds of
+	// partner chat during a typical grace period.
+	sendBufSize = 64
 
 	// per-client byte rate limit: 2 KB/s sustained with an 8 KB
 	// burst, controlling total throughput rather than message count.
@@ -34,63 +40,178 @@ const (
 // been closed.
 var ErrClientClosed = errors.New("client closed")
 
-// Client bridges a single WebSocket connection to the Hub.
-//
-//nolint:containedctx // ctx is the connection-scoped context, cancelled on Close
-type Client struct {
-	hub         *Hub
-	conn        *websocket.Conn
-	send        chan []byte
-	ctx         context.Context
-	cancel      context.CancelCauseFunc
-	readStopped chan struct{}
-	done        chan struct{}
-	token       match.Token
-	limiter     *rate.Limiter
+// MessageSink receives messages from a client's readPump. The hub
+// sets itself as the default sink; sessions swap in a closure over
+// their event channel.
+type MessageSink func(context.Context, *Client, Envelope)
 
-	// profile, lastPartner, attempt, and lastSearchAt are only
-	// accessed from the hub's Run goroutine. Do not read or
-	// write from other goroutines.
+// Client is a long-lived object tied to a token. WebSocket
+// connections attach and detach underneath it. The send channel
+// survives across connections so messages buffer during
+// disconnects and drain on reconnect.
+//
+//nolint:containedctx // ctx is the client-scoped context, cancelled on Close
+type Client struct {
+	// identity (set once at creation or via mutators)
+	token        match.Token
 	profile      *match.Profile
 	lastPartner  match.Token
 	attempt      match.Token
 	lastSearchAt time.Time
 
-	// reconnectToken is set before registration if the client
-	// is attempting to resume a previous session (read from
-	// query param). Read once by the hub's register handler.
-	reconnectToken match.Token
+	// long-lived (cancelled only by Close)
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	send   chan []byte
+	sink   atomic.Pointer[MessageSink]
+	pumpWG *sync.WaitGroup
+
+	// connection-scoped (cancelled by Detach or Close)
+	conn       *websocket.Conn
+	connCtx    context.Context
+	connCancel context.CancelCauseFunc
+	connDone   chan struct{} // closed when writePump exits
+	readDone   chan struct{} // closed when readPump exits
+	limiter    *rate.Limiter
+
+	// timers (started by Detach, stopped by Attach/Close)
+	graceTimer  *time.Timer
+	notifyTimer *time.Timer
+
+	// pump exit callback (set per-Attach, called by readPump)
+	onReadExit func(*Client)
 }
 
-// NewClient creates a client and starts its read/write pumps.
-// The context is used for the client's lifetime and cancelled
-// on Close.
-func (h *Hub) NewClient(ctx context.Context, conn *websocket.Conn, token match.Token) *Client {
-	ctx, cancel := context.WithCancelCause(ctx)
+// NewClient creates a persistent client with no connection.
+// Call Attach to start pumps on a WebSocket connection. The
+// pumpWG tracks writePump goroutines for graceful shutdown.
+func NewClient(
+	token match.Token,
+	defaultSink *MessageSink,
+	pumpWG *sync.WaitGroup,
+) *Client {
+	ctx, cancel := context.WithCancelCause(context.Background())
 	client := &Client{
-		hub:         h,
-		conn:        conn,
-		send:        make(chan []byte, sendBufSize),
-		ctx:         ctx,
-		cancel:      cancel,
-		readStopped: make(chan struct{}),
-		done:        make(chan struct{}),
-		token:       token,
-		limiter:     rate.NewLimiter(clientByteRate, clientByteBurst),
+		token:  token,
+		send:   make(chan []byte, sendBufSize),
+		ctx:    ctx,
+		cancel: cancel,
+		pumpWG: pumpWG,
 	}
-	h.clientWG.Go(client.writePump)
-	go client.readPump()
+	client.sink.Store(defaultSink)
 	return client
 }
 
-// Token returns the client's session token.
+// --- identity accessors ---
+
+// Token returns the client's unique session token.
 func (c *Client) Token() match.Token { return c.token }
 
-// SetReconnectToken stores a token for session resumption. Must
-// be called before Register.
-func (c *Client) SetReconnectToken(token match.Token) {
-	c.reconnectToken = token
+// Profile returns the client's match profile, or nil if none.
+func (c *Client) Profile() *match.Profile { return c.profile }
+
+// HasProfile reports whether the client has set a profile.
+func (c *Client) HasProfile() bool { return c.profile != nil }
+
+// SetProfile sets the client's match profile.
+func (c *Client) SetProfile(p *match.Profile) { c.profile = p }
+
+// Attempt returns the current search attempt token.
+func (c *Client) Attempt() match.Token { return c.attempt }
+
+// IsSearching reports whether the client has an active search.
+func (c *Client) IsSearching() bool { return c.attempt != "" }
+
+// BeginSearch records a new search attempt and marks the
+// search timestamp for cooldown tracking.
+func (c *Client) BeginSearch(attempt match.Token) {
+	c.attempt = attempt
+	c.lastSearchAt = time.Now()
 }
+
+// ClearSearch cancels the current search attempt and marks the
+// timestamp for cooldown tracking.
+func (c *Client) ClearSearch() {
+	c.attempt = ""
+	c.lastSearchAt = time.Now()
+}
+
+// SearchOnCooldown reports whether a new search would violate
+// the given cooldown duration.
+func (c *Client) SearchOnCooldown(cooldown time.Duration) bool {
+	return !c.lastSearchAt.IsZero() && time.Since(c.lastSearchAt) < cooldown
+}
+
+// LastPartner returns the token of the client's most recent
+// session partner.
+func (c *Client) LastPartner() match.Token { return c.lastPartner }
+
+// SetLastPartner records the token of the client's most recent
+// session partner.
+func (c *Client) SetLastPartner(token match.Token) { c.lastPartner = token }
+
+// --- connection lifecycle ---
+
+// Attach binds a WebSocket connection and starts read/write
+// pumps. If already attached, cancels the old connection and
+// waits for its pumps to exit before starting new ones. Stops
+// any grace/notify timers from a prior Detach.
+//
+// Returns any messages that were buffered on the send channel
+// during the disconnect gap. The caller can re-enqueue them
+// after sending recovery state.
+func (c *Client) Attach(conn *websocket.Conn, onReadExit func(*Client)) [][]byte {
+	if c.connCancel != nil {
+		c.connCancel(ErrClientClosed)
+		<-c.connDone
+	}
+
+	// drain messages buffered during the disconnect gap.
+	// safe because Attach is called from the hub's single event
+	// loop goroutine, and the old pumps have fully exited
+	// (connDone closed above).
+	var pending [][]byte
+	for len(c.send) > 0 {
+		pending = append(pending, <-c.send)
+	}
+
+	c.conn = conn
+	c.connCtx, c.connCancel = context.WithCancelCause(c.ctx)
+	c.connDone = make(chan struct{})
+	c.readDone = make(chan struct{})
+	c.limiter = rate.NewLimiter(clientByteRate, clientByteBurst)
+	c.onReadExit = onReadExit
+
+	c.stopTimers()
+
+	go c.readPump()
+	c.pumpWG.Go(c.writePump)
+	return pending
+}
+
+// Detach starts grace and notify timers after the connection is
+// lost. Called by the hub after the readPump exits. The pumps
+// self-terminate via connCtx cancellation; Detach does not stop
+// them. Attach stops the timers if reconnect happens before
+// expiry.
+func (c *Client) Detach(
+	gracePeriod time.Duration, onGraceExpired func(*Client),
+	notifyDelay time.Duration, onNotify func(*Client),
+) {
+	c.graceTimer = time.AfterFunc(gracePeriod, func() {
+		onGraceExpired(c)
+	})
+	c.notifyTimer = time.AfterFunc(notifyDelay, func() {
+		onNotify(c)
+	})
+}
+
+// SetSink atomically swaps the message routing destination.
+func (c *Client) SetSink(sink *MessageSink) {
+	c.sink.Store(sink)
+}
+
+// --- send methods ---
 
 // Send marshals a Message into a JSON Envelope and enqueues it for
 // sending. Used for protocol messages (token, key_exchange, etc.)
@@ -119,8 +240,9 @@ func (c *Client) SendComponent(ctx context.Context, components ...templ.Componen
 }
 
 // SendRaw enqueues pre-rendered bytes for sending as a text frame.
-// Blocks until queued or ctx is cancelled. If the client has been
-// closed, returns the cause passed to Close.
+// Blocks until queued or ctx is cancelled. Selects on the client
+// lifetime context (not connection), so sends buffer during
+// disconnects and drain on reconnect.
 func (c *Client) SendRaw(ctx context.Context, data []byte) error {
 	select {
 	case c.send <- data:
@@ -132,25 +254,75 @@ func (c *Client) SendRaw(ctx context.Context, data []byte) error {
 	}
 }
 
-// Close signals the client to shut down with the given cause.
-// Does not block; use Wait to block until the write pump has
-// drained. Safe to call multiple times.
-func (c *Client) Close(cause error) {
-	c.cancel(cause)
-}
-
-// Wait blocks until the write pump has finished draining buffered
-// messages and closed the connection, or until ctx expires.
-func (c *Client) Wait(ctx context.Context) {
+// TrySendRaw is a non-blocking variant of SendRaw. Returns false
+// if the send buffer is full. Useful for best-effort broadcasts
+// where dropping a message is preferable to stalling the caller.
+func (c *Client) TrySendRaw(data []byte) bool {
 	select {
-	case <-c.done:
-	case <-ctx.Done():
+	case c.send <- data:
+		return true
+	default:
+		return false
 	}
 }
 
+// --- lifecycle ---
+
+// Done returns a channel that is closed when the client is
+// permanently closed. Safe to call from any goroutine.
+func (c *Client) Done() <-chan struct{} { return c.ctx.Done() }
+
+// Close signals permanent client shutdown with the given cause.
+// Stops grace/notify timers and cancels the client context (which
+// also cancels any active connection). Does not block; use Wait to
+// block until the write pump has drained. Safe to call multiple
+// times.
+func (c *Client) Close(cause error) {
+	c.stopTimers()
+	c.cancel(cause)
+}
+
+// Wait blocks until the client is permanently closed and its
+// connection has fully drained, or until ctx expires.
+func (c *Client) Wait(ctx context.Context) {
+	select {
+	case <-c.ctx.Done():
+	case <-ctx.Done():
+		return
+	}
+	if c.connDone != nil {
+		select {
+		case <-c.connDone:
+		case <-ctx.Done():
+		}
+	}
+}
+
+// isDetached reports whether the client has no active connection.
+// Only safe to call from the hub's event loop goroutine.
+func (c *Client) isDetached() bool {
+	return c.connCtx == nil || c.connCtx.Err() != nil
+}
+
+func (c *Client) stopTimers() {
+	if c.graceTimer != nil {
+		c.graceTimer.Stop()
+		c.graceTimer = nil
+	}
+	if c.notifyTimer != nil {
+		c.notifyTimer.Stop()
+		c.notifyTimer = nil
+	}
+}
+
+// --- pumps ---
+
 func (c *Client) readPump() {
-	defer close(c.readStopped)
-	defer c.hub.Unregister(c)
+	defer func() {
+		c.connCancel(ErrClientClosed)
+		c.onReadExit(c)
+		close(c.readDone)
+	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
 	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
@@ -161,12 +333,12 @@ func (c *Client) readPump() {
 		return c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	})
 
-	// when the client context is canceled, expire the read
+	// when the connection context is canceled, expire the read
 	// deadline to unblock ReadMessage. SetReadDeadline on the
 	// underlying net.Conn is safe to call concurrently with a
 	// blocked Read. The pong handler runs synchronously inside
 	// ReadMessage so it cannot race.
-	stop := context.AfterFunc(c.ctx, func() {
+	stop := context.AfterFunc(c.connCtx, func() {
 		_ = c.conn.SetReadDeadline(time.Now())
 	})
 	defer stop()
@@ -201,7 +373,7 @@ func (c *Client) readPump() {
 		}
 		slog.Debug("ws recv", slog.String("type", string(env.Type)))
 
-		c.hub.Incoming(c.ctx, c, env)
+		(*c.sink.Load())(c.ctx, c, env)
 	}
 }
 
@@ -209,16 +381,19 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		// 1. stop the read pump
-		c.cancel(ErrClientClosed)
-		<-c.readStopped
-		// 2. drain buffered messages
-		c.drainAndClose()
-		// 3. close the connection
-		if err := c.conn.Close(); err != nil {
-			slog.Warn("ws conn close failed", slog.Any("error", err))
+		c.connCancel(ErrClientClosed)
+		<-c.readDone
+		// only drain to the connection on permanent close;
+		// on disconnect, messages stay buffered for reconnect
+		if c.ctx.Err() != nil {
+			c.drainAndClose()
 		}
-		close(c.done)
+		if c.conn != nil {
+			if err := c.conn.Close(); err != nil {
+				slog.Warn("ws conn close failed", slog.Any("error", err))
+			}
+		}
+		close(c.connDone)
 	}()
 
 	for {
@@ -228,7 +403,7 @@ func (c *Client) writePump() {
 				slog.Warn("ws write failed", slog.Any("error", err))
 				return
 			}
-		case <-c.ctx.Done():
+		case <-c.connCtx.Done():
 			return
 		case <-ticker.C:
 			if err := c.write(websocket.PingMessage, nil); err != nil {

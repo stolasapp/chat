@@ -165,6 +165,28 @@ func TestEnvelope_Parse(t *testing.T) {
 			},
 		},
 		{
+			name: "valid find_match with block as string",
+			env: Envelope{
+				Type: MessageTypeFindMatch,
+				Payload: json.RawMessage(`{
+					"gender": "male",
+					"role": "dominant",
+					"interests": [],
+					"filter_gender": [],
+					"filter_role": [],
+					"exclude_interests": [],
+					"block": "true"
+				}`),
+			},
+		},
+		{
+			name: "valid find_match block-only re-queue",
+			env: Envelope{
+				Type:    MessageTypeFindMatch,
+				Payload: json.RawMessage(`{"block":"true"}`),
+			},
+		},
+		{
 			name: "invalid gender",
 			env: Envelope{
 				Type:    MessageTypeFindMatch,
@@ -232,4 +254,35 @@ func TestEnvelope_Parse_FindMatchRoundTrip(t *testing.T) {
 	assert.True(t, findMatch.FilterGender.Contains(catalog.GenderNonBinary))
 	assert.True(t, findMatch.FilterRole.Contains(catalog.RoleDominant))
 	assert.True(t, findMatch.ExcludeInterests.Contains(catalog.InterestIndividualSports))
+}
+
+func TestFindMatchMessage_BlockFieldParsing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		payload string
+		want    bool
+	}{
+		{"bool true", `{"block":true}`, true},
+		{"bool false", `{"block":false}`, false},
+		{"string true", `{"block":"true"}`, true},
+		{"string false", `{"block":"false"}`, false},
+		{"absent", `{}`, false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			env := Envelope{
+				Type:    MessageTypeFindMatch,
+				Payload: json.RawMessage(test.payload),
+			}
+			msg, err := env.Parse()
+			require.NoError(t, err)
+			findMatch, ok := msg.(FindMatchMessage)
+			require.True(t, ok)
+			assert.Equal(t, test.want, findMatch.Block)
+		})
+	}
 }

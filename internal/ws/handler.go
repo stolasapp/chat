@@ -2,7 +2,6 @@
 package ws
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -77,17 +76,14 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	token := match.NewToken()
-	// detach from the request context so the client's lifetime
-	// extends beyond the HTTP handler return
-	connCtx := context.WithoutCancel(request.Context())
-	client := h.hub.NewClient(connCtx, conn, token)
+	client := h.hub.CreateClient(token)
 
-	// read reconnect token from query param
+	var reconnectToken match.Token
 	if qToken := request.URL.Query().Get("token"); qToken != "" {
-		client.SetReconnectToken(match.Token(qToken))
+		reconnectToken = match.Token(qToken)
 	}
 
-	if err := h.hub.Register(request.Context(), client); err != nil {
+	if err := h.hub.Register(request.Context(), client, conn, reconnectToken); err != nil {
 		slog.Warn("failed to register client", slog.Any("error", err))
 		client.Close(hub.ErrClientClosed)
 		return

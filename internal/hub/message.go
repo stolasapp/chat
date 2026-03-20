@@ -98,10 +98,35 @@ func (TokenMessage) MessageType() MessageType { return MessageTypeToken }
 // FindMatchMessage is sent by the client to enter the match queue.
 // When Block is true, the client's last partner is added to the
 // block list before re-queuing.
+//
+//nolint:recvcheck // UnmarshalJSON requires pointer receiver
 type FindMatchMessage struct {
 	match.Profile
 
 	Block bool `json:"block,omitempty"`
+}
+
+// UnmarshalJSON handles the block field arriving as either a JSON
+// boolean (true) or a string ("true") from HTML form serialization.
+func (m *FindMatchMessage) UnmarshalJSON(data []byte) error {
+	// decode everything except Block into an alias to avoid
+	// infinite recursion
+	type raw FindMatchMessage
+	var alias struct {
+		raw
+
+		Block json.RawMessage `json:"block"`
+	}
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	*m = FindMatchMessage(alias.raw)
+	if len(alias.Block) > 0 {
+		// strip quotes: "true" -> true, true -> true
+		s := string(alias.Block)
+		m.Block = s == "true" || s == `"true"`
+	}
+	return nil
 }
 
 // MessageType implements Message.

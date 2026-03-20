@@ -44,12 +44,12 @@ func simpleHandler(wsHub *Hub) *httptest.Server {
 		if err != nil {
 			return
 		}
-		connCtx := context.WithoutCancel(request.Context())
-		client := wsHub.NewClient(connCtx, conn, token)
+		client := wsHub.CreateClient(token)
+		var reconnectToken match.Token
 		if qToken := request.URL.Query().Get("token"); qToken != "" {
-			client.SetReconnectToken(match.Token(qToken))
+			reconnectToken = match.Token(qToken)
 		}
-		if err := wsHub.Register(connCtx, client); err != nil {
+		if err := wsHub.Register(request.Context(), client, conn, reconnectToken); err != nil {
 			client.Close(ErrClientClosed)
 			return
 		}
@@ -194,17 +194,11 @@ func TestHub_ClientByToken(t *testing.T) {
 
 	require.Eventually(t, func() bool { return wsHub.Len() == 1 }, time.Second, 10*time.Millisecond)
 
-	// find the registered client by iterating tokens (since
-	// simpleHandler uses a counter for unique tokens)
-	var client *Client
-	wsHub.mu.RLock()
-	for _, candidate := range wsHub.tokens {
-		client = candidate
-		break
-	}
-	wsHub.mu.RUnlock()
+	// find the registered client via registry snapshot
+	clients, _ := wsHub.reg.Snapshot()
+	require.Len(t, clients, 1)
+	client := clients[0]
 
-	require.NotNil(t, client)
 	assert.Equal(t, client.Token(), wsHub.ClientByToken(client.Token()).Token())
 }
 
@@ -320,14 +314,9 @@ func TestClient_CloseMultipleTimes(t *testing.T) {
 
 	require.Eventually(t, func() bool { return wsHub.Len() == 1 }, time.Second, 10*time.Millisecond)
 
-	wsHub.mu.RLock()
-	var client *Client
-	for candidate := range wsHub.clients {
-		client = candidate
-		break
-	}
-	wsHub.mu.RUnlock()
-	require.NotNil(t, client)
+	clients, _ := wsHub.reg.Snapshot()
+	require.Len(t, clients, 1)
+	client := clients[0]
 
 	// should not panic
 	client.Close(ErrClientClosed)
@@ -613,6 +602,51 @@ func TestHub_BlockAndRematch(t *testing.T) {
 	sendJSON(t, connC, MessageTypeFindMatch, findMatchPayload())
 
 	// A and C should match
+	assert.True(t, collA.waitFor("matched", 3*time.Second), "A should match C")
+	assert.True(t, collC.waitFor("matched", 3*time.Second), "C should match A")
+}
+
+// TestHub_BlockAndRematchFromButton simulates clicking the
+// "Block & Find Another" button which sends only block=true
+// without profile fields. The client's existing profile should
+// be reused.
+func TestHub_BlockAndRematchFromButton(t *testing.T) {
+	t.Parallel()
+
+	wsHub := testHub()
+	go wsHub.Run(t.Context())
+
+	srv := simpleHandler(wsHub)
+	defer srv.Close()
+
+	connA, connB, collA, collB := matchTwo(t, wsHub, srv)
+	defer func() { _ = connA.Close() }()
+	defer func() { _ = connB.Close() }()
+
+	// A leaves
+	sendJSON(t, connA, MessageTypeLeave, map[string]any{})
+	require.True(t, collA.waitFor(view.MsgYouLeft, 2*time.Second))
+	require.True(t, collB.waitFor(view.MsgPartnerLeft, 2*time.Second))
+
+	// A clicks "Block & Find Another" -- form sends only
+	// block="true" (string, no profile fields)
+	sendJSON(t, connA, MessageTypeFindMatch, map[string]any{
+		"block": "true",
+	})
+	require.True(t, collA.waitFor("Searching", 2*time.Second),
+		"re-queue from button should work with existing profile")
+
+	// connect C and match with A (B is blocked)
+	connC := dialHub(t, srv)
+	defer func() { _ = connC.Close() }()
+	collC := newCollector(t, connC)
+
+	require.Eventually(t, func() bool {
+		return wsHub.Len() == 3
+	}, time.Second, 10*time.Millisecond)
+
+	sendJSON(t, connC, MessageTypeFindMatch, findMatchPayload())
+
 	assert.True(t, collA.waitFor("matched", 3*time.Second), "A should match C")
 	assert.True(t, collC.waitFor("matched", 3*time.Second), "C should match A")
 }
