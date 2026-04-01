@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/templui/templui/utils"
-
 	"github.com/stolasapp/chat/internal/hub"
 	"github.com/stolasapp/chat/internal/static"
 	"github.com/stolasapp/chat/internal/view"
@@ -50,7 +48,7 @@ func New(cfg Config) *Server {
 	mux.Handle("GET /", templ.Handler(view.LandingPage()))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
 	mux.Handle("GET /ws", wsHandler)
-	utils.SetupScriptRoutes(mux, false)
+	mux.HandleFunc("GET /robots.txt", robotsTxtHandler)
 	mux.HandleFunc("/", notFoundHandler)
 
 	return &Server{
@@ -107,6 +105,13 @@ func (s *Server) limiterCleaner(ctx context.Context) {
 			return
 		}
 	}
+}
+
+const robotsTxt = "User-agent: *\nAllow: /\n"
+
+func robotsTxtHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(robotsTxt))
 }
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {

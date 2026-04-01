@@ -18,7 +18,7 @@ templ ChatView() {
 		<header class="flex items-center justify-between py-2">
 			<div class="flex items-center gap-2">
 				<img src="/static/fox.svg" alt="" class="h-5 w-5"/>
-				<h2 class="text-base font-medium">Stolas</h2>
+				<h2 class="text-base font-medium">{ Title }</h2>
 				@ClientCount(0)
 			</div>
 			@sheet.Sheet(sheet.Props{ID: "settings-sheet", Side: sheet.SideRight}) {

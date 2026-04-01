@@ -8,7 +8,7 @@ import "github.com/templui/templui/components/button"
 // via OOB swap.
 templ ChatEnded(message string, showActions bool) {
 	@appendMessage() {
-		<div data-notify="ended" class="mx-auto text-center space-y-3 py-4">
+		<div data-notify="ended" class="mx-auto text-center space-y-2 py-3">
 			<p class="text-sm text-muted-foreground">{ message }</p>
 			if showActions {
 				<div class="flex items-center justify-center gap-2">

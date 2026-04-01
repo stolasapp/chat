@@ -9,21 +9,10 @@ import (
 )
 
 templ LandingPage() {
-	@Layout("Stolas Chat") {
+	@Layout("Anonymous 1-on-1 Furry Chat") {
 		<div id={ ElementWSContainer } hx-ext="ws" ws-connect="/ws" class="h-full">
 			@LandingContent()
 		</div>
-		<script>
-			(function() {
-				const t = sessionStorage.getItem("session_token");
-				if (t) {
-					document.getElementById(IDs.wsContainer).setAttribute(
-						"ws-connect",
-						"/ws?token=" + encodeURIComponent(t)
-					);
-				}
-			})();
-		</script>
 	}
 }
 
@@ -35,10 +24,11 @@ templ LandingContent() {
 			<div class="flex items-center justify-center gap-4">
 				<img src="/static/fox.svg" alt="" class="h-16 w-16"/>
 				<div>
-					<h1 class="text-2xl font-bold tracking-tight">Stolas Chat</h1>
+					<h1 class="text-2xl font-bold tracking-tight">{ Title }</h1>
 					<p class="mt-0.5 text-sm text-muted-foreground">
 						18+ anonymous furry chat.<br/>
 						Set up your profile and get paired for a private 1:1 chat.
+						<noscript><br/><b class="text-amber-700 dark:text-amber-400">This app requires JavaScript to run.</b></noscript>
 					</p>
 				</div>
 			</div>

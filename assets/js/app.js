@@ -13,6 +13,24 @@ let ws = null;
 let typingTimeout = null;
 let isTyping = false;
 
+// Set ws-connect attribute with session token if available.
+// Called at load time (before htmx processes the DOM) and on
+// reconnect so the token is always present.
+function applySessionToken() {
+  const container = document.getElementById(IDs.wsContainer);
+  if (container === null) return;
+  const token = sessionStorage.getItem("session_token");
+  if (token !== null) {
+    container.setAttribute(
+      "ws-connect",
+      "/ws?token=" + encodeURIComponent(token),
+    );
+  } else {
+    container.setAttribute("ws-connect", "/ws");
+  }
+}
+applySessionToken();
+
 
 // --- Initialization ---
 
@@ -54,18 +72,7 @@ document.addEventListener("htmx:wsClose", () => {
   ws = null;
   isTyping = false;
   clearTimeout(typingTimeout);
-
-  const container = document.getElementById(IDs.wsContainer);
-  if (container === null) return;
-  const token = sessionStorage.getItem("session_token");
-  if (token !== null) {
-    container.setAttribute(
-      "ws-connect",
-      "/ws?token=" + encodeURIComponent(token),
-    );
-  } else {
-    container.setAttribute("ws-connect", "/ws");
-  }
+  applySessionToken();
 });
 
 // --- Typing indicator ---
@@ -194,6 +201,8 @@ document.addEventListener("htmx:wsAfterSend", (event) => {
 
 // --- Character count ---
 
+// Exposed on window for inline oninput handlers in templates.
+window.updateCharCount = updateCharCount;
 function updateCharCount(textarea) {
   const counter = document.getElementById(IDs.charCount);
   if (counter === null) return;
@@ -238,6 +247,8 @@ function appendOptimisticMessage(text, seq) {
 
 // --- Leave dialog ---
 
+// Exposed on window for inline onclick handlers in templates.
+window.openLeaveDialog = openLeaveDialog;
 function openLeaveDialog() {
   window.tui.dialog.open("leave-dialog");
 }
@@ -342,14 +353,18 @@ function readFromStorage() {
 
 function initForm(form) {
   form.dataset.initialized = "true";
-  restoreForm(form);
 
   form.addEventListener("change", () => {
     saveForm(form);
     updateFindButton(form);
   });
 
-  updateFindButton(form);
+  // Defer restore so the selectbox MutationObserver has time to
+  // set up reactive bindings on the new form's hidden inputs.
+  setTimeout(() => {
+    restoreForm(form);
+    updateFindButton(form);
+  }, 0);
 }
 
 // --- Form persistence (sessionStorage) ---
@@ -489,7 +504,7 @@ function showBrowserNotification(body) {
   }
   if (Notification.permission !== "granted") return;
 
-  new Notification("Stolas Chat", {
+  new Notification("Yiff Chat", {
     body: body,
     icon: "/static/fox.svg",
   });

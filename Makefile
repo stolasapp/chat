@@ -19,13 +19,27 @@ ARGS ?=
 .PHONY: all
 all: generate build
 
+# Non-module JS files prepended before the esbuild bundle.
+JS_VENDOR := \
+	assets/js/htmx.min.js \
+	assets/js/htmx-ws.js \
+	assets/js/htmx-class-tools.js
+
 .PHONY: generate
-generate: css
+generate: css js
 	$(GO) tool templ generate
 
 .PHONY: css
 css: $(TAILWIND) sources
 	$(TAILWIND) -i assets/css/input.css -o internal/static/output.css --minify
+
+.PHONY: js
+js:
+	@TEMPLUI_PATH=$$($(GO) list -m -f '{{.Dir}}' github.com/templui/templui 2>/dev/null) && \
+	sed "s|TEMPLUI_PATH|$$TEMPLUI_PATH|g" assets/js/entry.js > assets/js/entry.generated.js && \
+	{ for f in $(JS_VENDOR); do cat "$$f"; printf ';\n'; done; \
+	  $(GO) tool esbuild --bundle --minify --log-level=warning assets/js/entry.generated.js; \
+	} > internal/static/output.js
 
 .PHONY: sources
 sources:

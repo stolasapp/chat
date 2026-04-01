@@ -5,6 +5,7 @@ go 1.26
 tool (
 	github.com/a-h/templ/cmd/templ
 	github.com/air-verse/air
+	github.com/evanw/esbuild/cmd/esbuild
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	gvisor.dev/gvisor/tools/checklocks/cmd/checklocks
 )
@@ -84,6 +85,7 @@ require (
 	github.com/denis-tingaikin/go-header v0.5.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/ettle/strcase v0.2.0 // indirect
+	github.com/evanw/esbuild v0.27.4 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/firefart/nonamedreturns v1.0.6 // indirect
