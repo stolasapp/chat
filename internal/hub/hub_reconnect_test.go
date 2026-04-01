@@ -36,8 +36,8 @@ func matchTwoWithTokens(t *testing.T, wsHub *Hub, srv *httptest.Server) (
 	sendJSON(t, connA, MessageTypeFindMatch, findMatchPayload())
 	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
 
-	require.True(t, collA.waitFor("matched", 3*time.Second), "A should be matched")
-	require.True(t, collB.waitFor("matched", 3*time.Second), "B should be matched")
+	require.True(t, collA.waitFor(view.MsgMatched, 3*time.Second), "A should be matched")
+	require.True(t, collB.waitFor(view.MsgMatched, 3*time.Second), "B should be matched")
 
 	return connA, connB, collB, tokenA, tokenB
 }
@@ -70,8 +70,8 @@ func TestHub_ReconnectWithinGracePeriod(t *testing.T) {
 	defer func() { _ = connA2.Close() }()
 	collA2 := newCollector(t, connA2)
 
-	// should receive partner profile (MatchedNotify renders "matched with")
-	assert.True(t, collA2.waitFor("matched with", 3*time.Second), "should see partner profile on reconnect")
+	// should receive partner profile (MatchedNotify renders "You've connected with")
+	assert.True(t, collA2.waitFor(view.MsgMatched, 3*time.Second), "should see partner profile on reconnect")
 
 	// session should still work: B sends to A
 	sendJSON(t, connB, MessageTypeMessage, map[string]any{"text": "welcome back"})
@@ -264,8 +264,8 @@ func TestHub_RefreshFromLandingPageThenMatch(t *testing.T) {
 	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
 
 	// should match normally
-	assert.True(t, collA2.waitFor("matched", 3*time.Second), "A should match after refresh")
-	assert.True(t, collB.waitFor("matched", 3*time.Second), "B should match")
+	assert.True(t, collA2.waitFor(view.MsgMatched, 3*time.Second), "A should match after refresh")
+	assert.True(t, collB.waitFor(view.MsgMatched, 3*time.Second), "B should match")
 }
 
 func TestHub_RapidRefreshPreservesSession(t *testing.T) {
@@ -341,8 +341,8 @@ func TestHub_RefreshDuringSearchPreservesQueue(t *testing.T) {
 
 	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
 
-	assert.True(t, collA2.waitFor("matched", 3*time.Second), "A should match after refresh during search")
-	assert.True(t, collB.waitFor("matched", 3*time.Second), "B should match with reconnected A")
+	assert.True(t, collA2.waitFor(view.MsgMatched, 3*time.Second), "A should match after refresh during search")
+	assert.True(t, collB.waitFor(view.MsgMatched, 3*time.Second), "B should match with reconnected A")
 }
 
 func TestHub_SecondTabDoesNotStealSession(t *testing.T) {

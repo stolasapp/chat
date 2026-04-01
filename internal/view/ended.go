@@ -9,6 +9,7 @@ const (
 	MsgIdleKicked  = "Disconnected for inactivity."
 	MsgServerReset = "The server was reset. Find a new match to continue."
 	MsgCooldown    = "Please wait before searching again."
+	MsgMatched     = "You've connected with"
 )
 
 // SessionEndComponents returns the standard set of components

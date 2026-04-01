@@ -1,5 +1,7 @@
 package view
 
+import "github.com/templui/templui/components/button"
+
 // ChatEnded renders a notification after a chat session ends.
 // When showActions is true, "Find Another" and "Block & Find
 // Another" buttons are shown. Appended to the messages area
@@ -7,29 +9,28 @@ package view
 templ ChatEnded(message string, showActions bool) {
 	@appendMessage() {
 		<div data-notify="ended" class="mx-auto text-center space-y-3 py-4">
-			<p class="text-sm text-stone-500 dark:text-stone-400">{ message }</p>
+			<p class="text-sm text-muted-foreground">{ message }</p>
 			if showActions {
 				<div class="flex items-center justify-center gap-2">
 					<form ws-send class="inline">
 						<input type="hidden" name="type" value="find_match"/>
-						<button
-							type="submit"
-							id={ ElementFindAnother }
-							class="rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500"
-						>
+						@button.Button(button.Props{
+							Type: button.TypeSubmit,
+							ID:   ElementFindAnother,
+						}) {
 							Find Another
-						</button>
+						}
 					</form>
 					<form ws-send class="inline">
 						<input type="hidden" name="type" value="find_match"/>
 						<input type="hidden" name="block" value="true"/>
-						<button
-							type="submit"
-							id={ ElementBlockBtn }
-							class="rounded-md bg-stone-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-500 focus-visible:ring-2 focus-visible:ring-stone-400"
-						>
+						@button.Button(button.Props{
+							Type:    button.TypeSubmit,
+							ID:      ElementBlockBtn,
+							Variant: button.VariantSecondary,
+						}) {
 							Block &amp; Find Another
-						</button>
+						}
 					</form>
 				</div>
 			}

@@ -8,6 +8,13 @@ package view
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import (
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/selectbox"
+	"github.com/templui/templui/components/sheet"
+	"github.com/templui/templui/components/textarea"
+)
+
 func Layout(title string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -36,13 +43,29 @@ func Layout(title string) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/layout.templ`, Line: 9, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/layout.templ`, Line: 16, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><link rel=\"icon\" href=\"/static/fox.svg\" type=\"image/svg+xml\"><script src=\"https://cdn.tailwindcss.com\"></script><script>\n\t\t\t\ttailwind.config = {\n\t\t\t\t\tdarkMode: 'media',\n\t\t\t\t\ttheme: {\n\t\t\t\t\t\textend: {\n\t\t\t\t\t\t\tfontFamily: {\n\t\t\t\t\t\t\t\tsans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '\"Segoe UI\"', 'Roboto', '\"Helvetica Neue\"', 'Arial', 'sans-serif'],\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t},\n\t\t\t\t\t},\n\t\t\t\t};\n\t\t\t</script><script src=\"https://unpkg.com/htmx.org@2.0.4\" integrity=\"sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+\" crossorigin=\"anonymous\"></script><script src=\"https://unpkg.com/htmx-ext-ws@2.0.3/ws.js\" integrity=\"sha384-IeVkDiDIU+Zsabm4HnVf7ifa7LYLSoUCAYrFIjsn+0voIDaflLAalBqJ4CeEZodl\" crossorigin=\"anonymous\"></script><script src=\"https://unpkg.com/htmx-ext-class-tools@2.0.1/class-tools.js\" integrity=\"sha384-0v0tuTnrShh64XAhOtKRPY4PLiSWLSmdhmZ9Y1wCbiX5SqdXBfiwcCBM6mMVbjrc\" crossorigin=\"anonymous\" defer></script><style>\n\t\t\t\t/* Custom checkbox styling */\n\t\t\t\tinput[type=\"checkbox\"]:not(.hidden) {\n\t\t\t\t\t-webkit-appearance: none;\n\t\t\t\t\tappearance: none;\n\t\t\t\t\twidth: 1rem;\n\t\t\t\t\theight: 1rem;\n\t\t\t\t\tborder: 1.5px solid #a8a29e;\n\t\t\t\t\tborder-radius: 0.25rem;\n\t\t\t\t\tflex-shrink: 0;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tplace-content: center;\n\t\t\t\t\tbackground-color: transparent;\n\t\t\t\t}\n\t\t\t\tinput[type=\"checkbox\"]::before {\n\t\t\t\t\tcontent: \"\";\n\t\t\t\t\twidth: 0.625rem;\n\t\t\t\t\theight: 0.625rem;\n\t\t\t\t\ttransform: scale(0);\n\t\t\t\t\ttransition: transform 100ms ease-in-out;\n\t\t\t\t\tclip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);\n\t\t\t\t\tbackground-color: white;\n\t\t\t\t}\n\t\t\t\tinput[type=\"checkbox\"]:checked {\n\t\t\t\t\tbackground-color: #b45309;\n\t\t\t\t\tborder-color: #b45309;\n\t\t\t\t}\n\t\t\t\tinput[type=\"checkbox\"]:checked::before {\n\t\t\t\t\ttransform: scale(1);\n\t\t\t\t}\n\t\t\t\tinput[type=\"checkbox\"]:focus-visible {\n\t\t\t\t\toutline: 2px solid #f59e0b;\n\t\t\t\t\toutline-offset: 2px;\n\t\t\t\t}\n\t\t\t\t@media (prefers-color-scheme: dark) {\n\t\t\t\t\tinput[type=\"checkbox\"] {\n\t\t\t\t\t\tborder-color: #78716c;\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t/* Custom radio button styling */\n\t\t\t\tinput[type=\"radio\"] {\n\t\t\t\t\t-webkit-appearance: none;\n\t\t\t\t\tappearance: none;\n\t\t\t\t\twidth: 1rem;\n\t\t\t\t\theight: 1rem;\n\t\t\t\t\tborder: 1.5px solid #a8a29e;\n\t\t\t\t\tborder-radius: 50%;\n\t\t\t\t\tflex-shrink: 0;\n\t\t\t\t\tcursor: pointer;\n\t\t\t\t\tdisplay: grid;\n\t\t\t\t\tplace-content: center;\n\t\t\t\t\tbackground-color: transparent;\n\t\t\t\t}\n\t\t\t\tinput[type=\"radio\"]::before {\n\t\t\t\t\tcontent: \"\";\n\t\t\t\t\twidth: 0.5rem;\n\t\t\t\t\theight: 0.5rem;\n\t\t\t\t\tborder-radius: 50%;\n\t\t\t\t\ttransform: scale(0);\n\t\t\t\t\ttransition: transform 100ms ease-in-out;\n\t\t\t\t\tbackground-color: white;\n\t\t\t\t}\n\t\t\t\tinput[type=\"radio\"]:checked {\n\t\t\t\t\tbackground-color: #b45309;\n\t\t\t\t\tborder-color: #b45309;\n\t\t\t\t}\n\t\t\t\tinput[type=\"radio\"]:checked::before {\n\t\t\t\t\ttransform: scale(1);\n\t\t\t\t}\n\t\t\t\tinput[type=\"radio\"]:focus-visible {\n\t\t\t\t\toutline: 2px solid #f59e0b;\n\t\t\t\t\toutline-offset: 2px;\n\t\t\t\t}\n\t\t\t\t@media (prefers-color-scheme: dark) {\n\t\t\t\t\tinput[type=\"radio\"] {\n\t\t\t\t\t\tborder-color: #78716c;\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t/* Custom select arrow */\n\t\t\t\tselect {\n\t\t\t\t\t-webkit-appearance: none;\n\t\t\t\t\tappearance: none;\n\t\t\t\t\tbackground-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2378716c'%3E%3Cpath fill-rule='evenodd' d='M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E\");\n\t\t\t\t\tbackground-position: right 0.5rem center;\n\t\t\t\t\tbackground-repeat: no-repeat;\n\t\t\t\t\tbackground-size: 1.25rem;\n\t\t\t\t\tpadding-right: 2rem;\n\t\t\t\t}\n\t\t\t</style>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><link rel=\"icon\" href=\"/static/fox.svg\" type=\"image/svg+xml\"><link rel=\"stylesheet\" href=\"/static/output.css\"><script src=\"https://unpkg.com/htmx.org@2.0.4\" integrity=\"sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+\" crossorigin=\"anonymous\"></script><script src=\"https://unpkg.com/htmx-ext-ws@2.0.3/ws.js\" integrity=\"sha384-IeVkDiDIU+Zsabm4HnVf7ifa7LYLSoUCAYrFIjsn+0voIDaflLAalBqJ4CeEZodl\" crossorigin=\"anonymous\"></script><script src=\"https://unpkg.com/htmx-ext-class-tools@2.0.1/class-tools.js\" integrity=\"sha384-0v0tuTnrShh64XAhOtKRPY4PLiSWLSmdhmZ9Y1wCbiX5SqdXBfiwcCBM6mMVbjrc\" crossorigin=\"anonymous\" defer></script>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = selectbox.Script().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = dialog.Script().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = sheet.Script().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = textarea.Script().Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -50,7 +73,7 @@ func Layout(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<script src=\"/static/app.js\" defer></script></head><body class=\"h-full bg-stone-50 text-stone-900 dark:bg-stone-900 dark:text-stone-100\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<script src=\"/static/app.js\" defer></script></head><body class=\"h-full bg-background text-foreground\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

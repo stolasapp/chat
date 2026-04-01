@@ -406,8 +406,8 @@ func matchTwo(t *testing.T, wsHub *Hub, srv *httptest.Server) (
 	sendJSON(t, connA, MessageTypeFindMatch, findMatchPayload())
 	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
 
-	require.True(t, collA.waitFor("matched", 3*time.Second), "A should be matched")
-	require.True(t, collB.waitFor("matched", 3*time.Second), "B should be matched")
+	require.True(t, collA.waitFor(view.MsgMatched, 3*time.Second), "A should be matched")
+	require.True(t, collB.waitFor(view.MsgMatched, 3*time.Second), "B should be matched")
 
 	return connA, connB, collA, collB
 }
@@ -588,7 +588,7 @@ func TestHub_BlockAndRematch(t *testing.T) {
 	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
 
 	// neither should match (only two clients, and they're blocked)
-	assert.False(t, collA.waitFor("matched", 2*time.Second), "A should not match blocked B")
+	assert.False(t, collA.waitFor(view.MsgMatched, 2*time.Second), "A should not match blocked B")
 
 	// connect C; A should match C instead of B
 	connC := dialHub(t, srv)
@@ -602,8 +602,8 @@ func TestHub_BlockAndRematch(t *testing.T) {
 	sendJSON(t, connC, MessageTypeFindMatch, findMatchPayload())
 
 	// A and C should match
-	assert.True(t, collA.waitFor("matched", 3*time.Second), "A should match C")
-	assert.True(t, collC.waitFor("matched", 3*time.Second), "C should match A")
+	assert.True(t, collA.waitFor(view.MsgMatched, 3*time.Second), "A should match C")
+	assert.True(t, collC.waitFor(view.MsgMatched, 3*time.Second), "C should match A")
 }
 
 // TestHub_BlockAndRematchFromButton simulates clicking the
@@ -647,8 +647,8 @@ func TestHub_BlockAndRematchFromButton(t *testing.T) {
 
 	sendJSON(t, connC, MessageTypeFindMatch, findMatchPayload())
 
-	assert.True(t, collA.waitFor("matched", 3*time.Second), "A should match C")
-	assert.True(t, collC.waitFor("matched", 3*time.Second), "C should match A")
+	assert.True(t, collA.waitFor(view.MsgMatched, 3*time.Second), "A should match C")
+	assert.True(t, collC.waitFor(view.MsgMatched, 3*time.Second), "C should match A")
 }
 
 func TestHub_MatchLeaveRematch(t *testing.T) {
@@ -678,8 +678,8 @@ func TestHub_MatchLeaveRematch(t *testing.T) {
 	sendJSON(t, connB, MessageTypeFindMatch, findMatchPayload())
 
 	// wait for match
-	matchedA := collA.waitFor("matched", 3*time.Second)
-	matchedB := collB.waitFor("matched", 3*time.Second)
+	matchedA := collA.waitFor(view.MsgMatched, 3*time.Second)
+	matchedB := collB.waitFor(view.MsgMatched, 3*time.Second)
 	require.True(t, matchedA, "client A should be matched")
 	require.True(t, matchedB, "client B should be matched")
 
@@ -698,8 +698,8 @@ func TestHub_MatchLeaveRematch(t *testing.T) {
 
 	// should re-match quickly (not 20s+)
 	start := time.Now()
-	rematchedA := collA.waitFor("matched", 5*time.Second)
-	rematchedB := collB.waitFor("matched", 5*time.Second)
+	rematchedA := collA.waitFor(view.MsgMatched, 5*time.Second)
+	rematchedB := collB.waitFor(view.MsgMatched, 5*time.Second)
 	elapsed := time.Since(start)
 	require.True(t, rematchedA, "client A should be re-matched")
 	require.True(t, rematchedB, "client B should be re-matched")

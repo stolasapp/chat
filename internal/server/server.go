@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/a-h/templ"
+	"github.com/templui/templui/utils"
 
 	"github.com/stolasapp/chat/internal/hub"
 	"github.com/stolasapp/chat/internal/static"
@@ -17,27 +19,12 @@ import (
 )
 
 const (
-	// readHeaderTimeout bounds how long the server waits for
-	// request headers after accepting a connection (slowloris
-	// defense). ReadTimeout and WriteTimeout are intentionally
-	// omitted: they apply to the full connection lifetime and
-	// would kill long-lived WebSocket connections. The WS pumps
-	// manage their own per-message deadlines instead.
 	readHeaderTimeout = 10 * time.Second
-
-	// idleTimeout controls how long keep-alive HTTP connections
-	// (non-upgraded) sit idle before being closed.
-	idleTimeout = 120 * time.Second
-
-	// maxHeaderBytes caps the size of request headers to prevent
-	// memory exhaustion from oversized headers.
-	maxHeaderBytes = 1 << 20 // 1 MiB
-
-	shutdownTimeout = 10 * time.Second
-
-	limiterCleanup = 5 * time.Minute
-
-	limiterMaxAge = 10 * time.Minute
+	idleTimeout       = 120 * time.Second
+	maxHeaderBytes    = 1 << 20 // 1 MiB
+	shutdownTimeout   = 10 * time.Second
+	limiterCleanup    = 5 * time.Minute
+	limiterMaxAge     = 10 * time.Minute
 )
 
 // Config holds the dependencies needed to construct a Server.
@@ -63,6 +50,7 @@ func New(cfg Config) *Server {
 	mux.Handle("GET /", templ.Handler(view.LandingPage()))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
 	mux.Handle("GET /ws", wsHandler)
+	utils.SetupScriptRoutes(mux, false)
 	mux.HandleFunc("/", notFoundHandler)
 
 	return &Server{
@@ -80,26 +68,8 @@ func New(cfg Config) *Server {
 // ListenAndServe starts the HTTP server.
 func (s *Server) ListenAndServe(ctx context.Context) {
 	ctx, cancel := context.WithCancelCause(ctx)
-	go func() {
-		defer cancel(nil)
-		slog.Info("server starting", slog.String("addr", s.http.Addr))
-		if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			cancel(err)
-			slog.Error("server failed", slog.Any("error", err))
-		}
-	}()
-	go func() {
-		ticker := time.NewTicker(limiterCleanup)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				s.wsHandler.Cleanup(limiterMaxAge)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go s.serve(cancel)
+	go s.limiterCleaner(ctx)
 
 	// block until the server exits or the context is cancelled
 	<-ctx.Done()
@@ -108,6 +78,34 @@ func (s *Server) ListenAndServe(ctx context.Context) {
 	defer shutdownCancel()
 	if err := s.http.Shutdown(shutdownCtx); err != nil {
 		slog.Error("http shutdown failed", slog.Any("error", err))
+	}
+}
+
+func (s *Server) serve(cancel context.CancelCauseFunc) {
+	defer cancel(nil)
+	lis, err := net.Listen("tcp", s.http.Addr)
+	if err != nil {
+		cancel(err)
+		slog.Error("server failed to listen", slog.Any("error", err))
+		return
+	}
+	slog.Info("server starting", slog.String("address", lis.Addr().String()))
+	if err = s.http.Serve(lis); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		cancel(err)
+		slog.Error("server failed", slog.Any("error", err))
+	}
+}
+
+func (s *Server) limiterCleaner(ctx context.Context) {
+	ticker := time.NewTicker(limiterCleanup)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.wsHandler.Cleanup(limiterMaxAge)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

@@ -19,7 +19,7 @@ templ ChatMessage(text string, self bool, seq int) {
 		}
 	} else {
 		@appendMessage() {
-			<div data-notify="message" class="mr-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-stone-200 dark:bg-stone-700 px-3 py-2 text-sm leading-relaxed">
+			<div data-notify="message" class="mr-auto max-w-[75%] break-words hyphens-auto rounded-lg bg-secondary px-3 py-2 text-sm leading-relaxed">
 				@linkifyMessage(text, self)
 			</div>
 		}

@@ -1,0 +1,109 @@
+@import "tailwindcss";
+@import "./sources.generated.css";
+
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:not(.light, .light *)) {
+      @slot;
+    }
+  }
+}
+
+:root {
+  --radius: 0.375rem;
+  --background: oklch(0.985 0.002 75);
+  --foreground: oklch(0.147 0.004 49.25);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.147 0.004 49.25);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.147 0.004 49.25);
+  --primary: oklch(0.555 0.163 48.998);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.923 0.003 48.717);
+  --secondary-foreground: oklch(0.147 0.004 49.25);
+  --muted: oklch(0.97 0.001 106.424);
+  --muted-foreground: oklch(0.553 0.013 58.071);
+  --accent: oklch(0.95 0.002 75);
+  --accent-foreground: oklch(0.147 0.004 49.25);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.923 0.003 48.717);
+  --input: oklch(0.923 0.003 48.717);
+  --ring: oklch(0.769 0.188 70.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.147 0.004 49.25);
+    --foreground: oklch(0.97 0.001 106.424);
+    --card: oklch(0.268 0.007 34.298);
+    --card-foreground: oklch(0.97 0.001 106.424);
+    --popover: oklch(0.268 0.007 34.298);
+    --popover-foreground: oklch(0.97 0.001 106.424);
+    --primary: oklch(0.666 0.179 58.318);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.444 0.011 73.639);
+    --secondary-foreground: oklch(0.97 0.001 106.424);
+    --muted: oklch(0.268 0.007 34.298);
+    --muted-foreground: oklch(0.709 0.01 56.259);
+    --accent: oklch(0.45 0.02 49.25);
+    --accent-foreground: oklch(0.97 0.001 106.424);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(0.444 0.011 73.639);
+    --input: oklch(0.444 0.011 73.639);
+    --ring: oklch(0.769 0.188 70.08);
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+}
+
+/* SelectBox: multi-select triggers grow to fit wrapped pills. */
+[data-tui-selectbox-multiple="true"] {
+  height: auto !important;
+  min-height: 2.25rem;
+}
+[data-tui-selectbox-multiple="true"] .select-value {
+  overflow: visible !important;
+  white-space: normal !important;
+  text-overflow: unset !important;
+}
+
+/* SelectBox: differentiate selected from hover. The component
+   uses bg-accent for both, so we override the selected state
+   to use primary with muted opacity. */
+[data-tui-selectbox-selected="true"] {
+  background-color: color-mix(in oklch, var(--primary) 15%, transparent) !important;
+}
+[data-tui-selectbox-selected="true"]:hover {
+  background-color: color-mix(in oklch, var(--primary) 25%, transparent) !important;
+}

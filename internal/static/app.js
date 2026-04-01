@@ -203,10 +203,10 @@ function updateCharCount(textarea) {
     counter.classList.remove("hidden");
     if (remaining <= 50) {
       counter.classList.add("text-red-500", "dark:text-red-400");
-      counter.classList.remove("text-stone-400", "dark:text-stone-500");
+      counter.classList.remove("text-muted-foreground");
     } else {
       counter.classList.remove("text-red-500", "dark:text-red-400");
-      counter.classList.add("text-stone-400", "dark:text-stone-500");
+      counter.classList.add("text-muted-foreground");
     }
   } else {
     counter.classList.add("hidden");
@@ -239,10 +239,78 @@ function appendOptimisticMessage(text, seq) {
 // --- Leave dialog ---
 
 function openLeaveDialog() {
-  const dialog = document.getElementById("leave-dialog");
-  dialog.showModal();
-  const cancel = document.getElementById("leave-cancel");
-  if (cancel !== null) cancel.focus();
+  window.tui.dialog.open("leave-dialog");
+}
+
+// --- SelectBox pill expansion ---
+
+// templUI's selectbox JS collapses pills to "{n} items selected"
+// when they overflow. Re-expand them in a double-rAF so our
+// override runs after the library's collapse logic.
+function scheduleExpandPills(event) {
+  const item = event.target.closest(".select-item");
+  if (item === null) return;
+  const container = item.closest(".select-container");
+  if (container === null) return;
+  const trigger = container.querySelector(
+    "[data-tui-selectbox-multiple=true]",
+  );
+  if (trigger === null) return;
+  // Double rAF to run after the library's single rAF collapse.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      expandPills(trigger);
+    });
+  });
+}
+document.addEventListener("click", scheduleExpandPills);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") scheduleExpandPills(event);
+});
+
+function expandPills(trigger) {
+  const valueEl = trigger.querySelector(".select-value");
+  if (valueEl === null) return;
+  // If pills are already showing, nothing to do.
+  if (valueEl.querySelector("div")) return;
+
+  const container = trigger.closest(".select-container");
+  if (container === null) return;
+  const content = container.querySelector("[data-tui-selectbox-content]");
+  if (content === null) return;
+  const selectedItems = content.querySelectorAll(
+    '[data-tui-selectbox-selected="true"]',
+  );
+  if (selectedItems.length === 0) return;
+
+  while (valueEl.firstChild) valueEl.removeChild(valueEl.firstChild);
+  const pillsDiv = document.createElement("div");
+  pillsDiv.className = "flex flex-wrap gap-1 items-center min-h-[1.5rem]";
+
+  selectedItems.forEach((item) => {
+    const pill = document.createElement("span");
+    pill.className =
+      "inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-primary text-primary-foreground";
+    const text = document.createElement("span");
+    text.textContent =
+      item.querySelector(".select-item-text")?.textContent || "";
+    pill.appendChild(text);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "ml-0.5 hover:text-destructive focus:outline-none";
+    removeBtn.type = "button";
+    removeBtn.textContent = "\u00D7";
+    removeBtn.setAttribute("data-tui-selectbox-pill-remove", "");
+    removeBtn.setAttribute(
+      "data-tui-selectbox-value",
+      item.getAttribute("data-tui-selectbox-value"),
+    );
+    pill.appendChild(removeBtn);
+
+    pillsDiv.appendChild(pill);
+  });
+
+  valueEl.appendChild(pillsDiv);
 }
 
 // --- Helpers ---
@@ -270,11 +338,10 @@ function readFromStorage() {
   }
 }
 
-// --- Searchable picker ---
+// --- Form initialization ---
 
 function initForm(form) {
   form.dataset.initialized = "true";
-  initSearchablePickers(form);
   restoreForm(form);
 
   form.addEventListener("change", () => {
@@ -283,76 +350,6 @@ function initForm(form) {
   });
 
   updateFindButton(form);
-}
-
-function initSearchablePickers(form) {
-  form.querySelectorAll(".searchable-picker").forEach(initPicker);
-}
-
-function initPicker(picker) {
-  const search = picker.querySelector(".picker-search");
-  const items = picker.querySelectorAll(".picker-item");
-
-  search.addEventListener("input", () => {
-    const query = search.value.toLowerCase().trim();
-    items.forEach((item) => {
-      const matches = query === "" || item.dataset.value.includes(query);
-      item.style.display = matches ? "" : "none";
-    });
-  });
-
-  picker
-    .querySelectorAll('input[type="checkbox"], input[type="radio"]')
-    .forEach((input) => {
-      input.addEventListener("change", () => syncTags(picker));
-    });
-}
-
-function syncTags(picker) {
-  const container = picker.querySelector(".picker-tags");
-
-  while (container.firstChild) {
-    container.removeChild(container.firstChild);
-  }
-
-  const checked = picker.querySelectorAll(
-    'input[type="checkbox"]:checked, input[type="radio"]:checked',
-  );
-
-  if (checked.length === 0) {
-    container.classList.add("hidden");
-    container.classList.remove("flex");
-  } else {
-    container.classList.remove("hidden");
-    container.classList.add("flex");
-  }
-
-  checked.forEach((cb) => {
-    const tag = document.createElement("span");
-    tag.className =
-      "inline-flex items-center gap-0.5 rounded-full bg-amber-100 " +
-      "dark:bg-amber-900 px-2 py-0.5 text-xs font-medium " +
-      "text-amber-700 dark:text-amber-300";
-    const parentLabel = cb.closest("label");
-    tag.textContent =
-      parentLabel !== null ? parentLabel.textContent.trim() : cb.value;
-
-    if (cb.type === "checkbox") {
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className =
-        "ml-0.5 text-amber-500 hover:text-amber-700 " +
-        "dark:hover:text-amber-100 text-sm leading-none";
-      remove.textContent = "\u00D7";
-      remove.addEventListener("click", () => {
-        cb.checked = false;
-        cb.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-      tag.appendChild(remove);
-    }
-
-    container.appendChild(tag);
-  });
 }
 
 // --- Form persistence (sessionStorage) ---
@@ -377,55 +374,62 @@ function saveForm(form) {
 
 function restoreForm(form) {
   const raw = sessionStorage.getItem(STORAGE_KEY);
-  if (raw !== null) {
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      data = {};
-    }
+  if (raw === null) return;
 
-    setSelect(form, "gender", data.gender);
-    setSelect(form, "role", data.role);
-    setRadio(form, "species", data.species || "");
-    setCheckboxes(form, "interests", data.interests || []);
-    setCheckboxes(form, "filter_gender", data.filter_gender || []);
-    setCheckboxes(form, "filter_role", data.filter_role || []);
-    setCheckboxes(form, "exclude_interests", data.exclude_interests || []);
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return;
   }
 
-  // default species to "other" if nothing selected
-  const speciesSelected = form.querySelector(
-    'input[type="radio"][name="species"]:checked',
-  );
-  if (speciesSelected === null) {
-    setRadio(form, "species", "other");
-  }
-
-  form.querySelectorAll(".searchable-picker").forEach(syncTags);
+  setSelectBoxValue(form, "gender", data.gender);
+  setSelectBoxValue(form, "role", data.role);
+  setSelectBoxValue(form, "species", data.species || "");
+  setSelectBoxValues(form, "interests", data.interests || []);
+  setSelectBoxValues(form, "filter_gender", data.filter_gender || []);
+  setSelectBoxValues(form, "filter_role", data.filter_role || []);
+  setSelectBoxValues(form, "exclude_interests", data.exclude_interests || []);
 }
 
-function setSelect(form, name, value) {
-  if (value === undefined) return;
-  const el = form.querySelector(`select[name="${name}"]`);
-  if (el !== null) el.value = value;
+// setSelectBoxValue sets a single-select SelectBox's hidden input
+// value and triggers its change event so the component updates.
+function setSelectBoxValue(form, name, value) {
+  if (!value) return;
+  const input = form.querySelector('input[type="hidden"][name="' + name + '"]');
+  if (input === null) return;
+  input.value = value;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function setRadio(form, name, value) {
-  if (value === "") return;
-  const el = form.querySelector(
-    `input[type="radio"][name="${name}"][value="${value}"]`,
-  );
-  if (el !== null) el.checked = true;
-}
-
-function setCheckboxes(form, name, values) {
-  const set = new Set(values);
-  form
-    .querySelectorAll(`input[type="checkbox"][name="${name}"]`)
-    .forEach((input) => {
-      input.checked = set.has(input.value);
+// setSelectBoxValues sets a multi-select SelectBox's hidden inputs.
+// SelectBox creates one hidden input per selected value.
+function setSelectBoxValues(form, name, values) {
+  if (!values || values.length === 0) return;
+  // Find the selectbox container by looking for the trigger with
+  // the matching name attribute.
+  const trigger = form.querySelector('[data-name="' + name + '"]');
+  if (trigger === null) {
+    // Fall back to setting hidden inputs directly
+    values.forEach((value) => {
+      const input = form.querySelector(
+        'input[type="hidden"][name="' + name + '"][value="' + value + '"]',
+      );
+      if (input !== null) {
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
     });
+    return;
+  }
+  // For multi-select, we need to click the matching items
+  const selectboxEl = trigger.closest("[data-selectbox]");
+  if (selectboxEl === null) return;
+  values.forEach((value) => {
+    const item = selectboxEl.querySelector('[data-value="' + value + '"]');
+    if (item !== null) {
+      item.click();
+    }
+  });
 }
 
 function updateFindButton(form) {
