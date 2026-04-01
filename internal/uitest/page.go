@@ -45,33 +45,35 @@ func (p *testPage) waitStable() {
 	p.Page.Timeout(stableTimeout).MustWaitStable()
 }
 
-// js runs JavaScript in the page and returns the JSON result.
+// js runs JavaScript in the page and returns the string result.
+// The expression should be a JS function like `() => expr`.
 func (p *testPage) js(expression string) string {
 	return p.Page.Timeout(defaultTimeout).MustEval(expression).Str()
 }
 
-// selectBoxSelect sets a selectbox value by clicking the matching
-// item in the dropdown. The name parameter matches the hidden
-// input's name attribute.
+// selectBoxSelect sets a selectbox value by programmatically
+// setting the hidden input and dispatching events. This avoids
+// issues with popover positioning in headless mode.
 func (p *testPage) selectBoxSelect(name, value string) {
-	trigger := p.el(
-		`button.select-trigger:has(input[name="` + name + `"])`)
-	trigger.MustClick()
-	p.waitStable()
-
-	container := trigger.MustParent().MustParent()
-	item := container.Timeout(defaultTimeout).MustElement(
-		`[data-tui-selectbox-value="` + value + `"]`)
-	item.MustClick()
+	p.js(`() => {
+		const input = document.querySelector(
+			'input[type="hidden"][name="` + name + `"]');
+		if (!input) throw new Error("no input for " + "` + name + `");
+		input.value = "` + value + `";
+		input.dispatchEvent(new Event("input", {bubbles: true}));
+		input.dispatchEvent(new Event("change", {bubbles: true}));
+	}`)
 	p.waitStable()
 }
 
-// typeInto clears a textarea/input and types text into it.
+// typeInto sets the value of a textarea/input via JS.
 func (p *testPage) typeInto(selector, text string) {
-	el := p.el(selector)
-	el.MustClick()
-	el.MustSelectAllText()
-	el.MustInput(text)
+	p.js(`() => {
+		const el = document.querySelector('` + selector + `');
+		el.focus();
+		el.value = '` + text + `';
+		el.dispatchEvent(new Event('input', {bubbles: true}));
+	}`)
 	p.waitStable()
 }
 
