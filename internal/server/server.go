@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+
 	"github.com/stolasapp/chat/internal/hub"
 	"github.com/stolasapp/chat/internal/static"
 	"github.com/stolasapp/chat/internal/view"
@@ -28,6 +29,7 @@ const (
 // Config holds the dependencies needed to construct a Server.
 type Config struct {
 	Addr           string
+	Domain         string
 	Hub            *hub.Hub
 	AllowedOrigins []string
 	HSTS           bool
@@ -46,16 +48,26 @@ func New(cfg Config) *Server {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /", templ.Handler(view.LandingPage()))
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
+	mux.Handle("GET /static/", cacheControl(
+		http.StripPrefix("/static/", http.FileServer(http.FS(static.Assets))),
+	))
 	mux.Handle("GET /ws", wsHandler)
 	mux.HandleFunc("GET /robots.txt", robotsTxtHandler)
 	mux.HandleFunc("/", notFoundHandler)
+
+	handler := domainMiddleware(
+		cspMiddleware(
+			securityHeaders(mux, cfg.HSTS),
+			cfg.Domain,
+		),
+		cfg.Domain,
+	)
 
 	return &Server{
 		wsHandler: wsHandler,
 		http: &http.Server{
 			Addr:              cfg.Addr,
-			Handler:           securityHeaders(mux, cfg.HSTS),
+			Handler:           handler,
 			ReadHeaderTimeout: readHeaderTimeout,
 			IdleTimeout:       idleTimeout,
 			MaxHeaderBytes:    maxHeaderBytes,
@@ -66,7 +78,7 @@ func New(cfg Config) *Server {
 // ListenAndServe starts the HTTP server.
 func (s *Server) ListenAndServe(ctx context.Context) {
 	ctx, cancel := context.WithCancelCause(ctx)
-	go s.serve(cancel)
+	go s.serve(ctx, cancel)
 	go s.limiterCleaner(ctx)
 
 	// block until the server exits or the context is cancelled
@@ -79,9 +91,9 @@ func (s *Server) ListenAndServe(ctx context.Context) {
 	}
 }
 
-func (s *Server) serve(cancel context.CancelCauseFunc) {
+func (s *Server) serve(ctx context.Context, cancel context.CancelCauseFunc) {
 	defer cancel(nil)
-	lis, err := net.Listen("tcp", s.http.Addr)
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.http.Addr)
 	if err != nil {
 		cancel(err)
 		slog.Error("server failed to listen", slog.Any("error", err))
@@ -105,6 +117,15 @@ func (s *Server) limiterCleaner(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// cacheControl wraps a handler to add immutable cache headers.
+// Used for versioned static assets.
+func cacheControl(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		next.ServeHTTP(writer, request)
+	})
 }
 
 const robotsTxt = "User-agent: *\nAllow: /\n"

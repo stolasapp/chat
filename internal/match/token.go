@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 )
 
-const tokenBytes = 8 // 64 bits per token
+const tokenBytes = 16 // 128 bits per token
 
 // Token is a session token identifying a connected client.
 type Token string

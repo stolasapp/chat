@@ -70,8 +70,6 @@ templ ChatView() {
 							"aria-label":   "Message text",
 							"autocomplete": "off",
 							"maxlength":    strconv.Itoa(MaxMessageLength),
-							"oninput":      "updateCharCount(this)",
-							"onkeydown":    "if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit()}",
 						},
 						Class: "max-h-[50vh] pr-16",
 					})
@@ -83,10 +81,8 @@ templ ChatView() {
 				@SendButton(false)
 			</form>
 			@button.Button(button.Props{
+				ID:      "leave-btn",
 				Variant: button.VariantOutline,
-				Attributes: templ.Attributes{
-					"onclick": "openLeaveDialog()",
-				},
 			}) {
 				Leave
 			}
@@ -98,21 +94,17 @@ templ ChatView() {
 				</p>
 				@dialog.Footer(dialog.FooterProps{}) {
 					@button.Button(button.Props{
+						ID:      "leave-cancel-btn",
 						Variant: button.VariantSecondary,
-						Attributes: templ.Attributes{
-							"onclick": "window.tui.dialog.close('leave-dialog')",
-						},
 					}) {
 						Cancel
 					}
 					<form ws-send class="inline">
 						<input type="hidden" name="type" value="leave"/>
 						@button.Button(button.Props{
+							ID:      "leave-confirm-btn",
 							Type:    button.TypeSubmit,
 							Variant: button.VariantDestructive,
-							Attributes: templ.Attributes{
-								"onclick": "window.tui.dialog.close('leave-dialog')",
-							},
 						}) {
 							Leave
 						}

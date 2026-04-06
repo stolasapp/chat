@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"encoding/json"
+	"html"
 	"io"
 
 	"github.com/a-h/templ"
@@ -31,10 +32,26 @@ const (
 	MaxMessageLength = 2000
 )
 
+// nonceScript returns a templ component that emits a <script> tag
+// with the CSP nonce from the request context and the given src.
+func nonceScript(src string) templ.Component {
+	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+		nonce := Nonce(ctx)
+		tag := `<script src="` + html.EscapeString(src) + `"`
+		if nonce != "" {
+			tag += ` nonce="` + html.EscapeString(nonce) + `"`
+		}
+		tag += " defer></script>"
+		_, err := io.WriteString(w, tag)
+		return err
+	})
+}
+
 // elementIDs returns a templ component that emits a script block
-// attaching the element ID constants to window.IDs.
+// attaching the element ID constants to window.IDs. The CSP nonce
+// is read from the request context.
 func elementIDs() templ.Component {
-	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
+	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
 		ids := map[string]any{
 			"content":          ElementContent,
 			"messages":         ElementMessages,
@@ -51,7 +68,13 @@ func elementIDs() templ.Component {
 		if err != nil {
 			return err
 		}
-		_, err = io.WriteString(w, "<script>window.IDs=Object.freeze("+string(data)+")</script>")
+		nonce := Nonce(ctx)
+		tag := "<script"
+		if nonce != "" {
+			tag += ` nonce="` + html.EscapeString(nonce) + `"`
+		}
+		tag += ">window.IDs=Object.freeze(" + string(data) + ")</script>"
+		_, err = io.WriteString(w, tag)
 		return err
 	})
 }

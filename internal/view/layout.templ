@@ -1,12 +1,21 @@
 package view
 
+import (
+	"context"
+
+	"github.com/stolasapp/chat/internal/static"
+)
 
 const (
-    Title = "Yiff Chat"
-    Domain = "https://yiff.chat/"
-    Favicon = "static/fox.svg"
-    Description = "Anonymous 18+ furry chat. Set up your profile, get matched 1-on-1, and start chatting instantly."
+	Title         = "Yiff Chat"
+	DefaultDomain = "https://yiff.chat/"
+	Favicon       = "static/fox.svg"
+	Description   = "Anonymous 18+ furry chat. Set up your profile, get matched 1-on-1, and start chatting instantly."
 )
+
+func domain(ctx context.Context) string {
+	return Domain(ctx, DefaultDomain)
+}
 
 templ Layout(title string) {
 	<!DOCTYPE html>
@@ -17,20 +26,20 @@ templ Layout(title string) {
 			<title>{ Title } > { title }</title>
 			<meta name="robots" content="index, follow"/>
 			<meta name="description" content={ Description }/>
-			<link rel="canonical" href={ Domain }/>
+			<link rel="canonical" href={ domain(ctx) }/>
 			<meta property="og:type" content="website"/>
-			<meta property="og:url" content={ Domain }/>
+			<meta property="og:url" content={ domain(ctx) }/>
 			<meta property="og:title" content={ Title }/>
 			<meta property="og:description" content={ Description }/>
-			<meta property="og:image" content={ Domain + Favicon }/>
+			<meta property="og:image" content={ domain(ctx) + Favicon }/>
 			<meta name="twitter:card" content="summary"/>
 			<meta name="twitter:title" content={ Title }/>
 			<meta name="twitter:description" content={ Description }/>
-			<meta name="twitter:image" content={ Domain + Favicon }/>
-			<link rel="icon" href={"/" + Favicon} type="image/svg+xml"/>
-			<link rel="stylesheet" href="/static/output.css"/>
+			<meta name="twitter:image" content={ domain(ctx) + Favicon }/>
+			<link rel="icon" href={ "/" + Favicon } type="image/svg+xml"/>
+			<link rel="stylesheet" href={ static.CSSPath() }/>
 			@elementIDs()
-			<script src="/static/output.js" defer></script>
+			@nonceScript(static.JSPath())
 		</head>
 		<body class="h-full bg-background text-foreground">
 			{ children... }

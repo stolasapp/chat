@@ -1,7 +1,6 @@
 package uitest
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/go-rod/rod"
@@ -11,7 +10,10 @@ import (
 )
 
 // TestUI is the parent test that starts a single server and headless
-// browser, then runs all UI subtests serially.
+// browser, then runs all UI subtests serially. Subtests share a single
+// browser and server instance and must run sequentially.
+//
+//nolint:paralleltest,tparallel // sequential E2E tests sharing browser state
 func TestUI(t *testing.T) {
 	t.Parallel()
 
@@ -56,11 +58,11 @@ func newPage(t *testing.T, browser *rod.Browser, server *Server) *testPage {
 	page := browser.MustPage(server.URL("/"))
 	t.Cleanup(func() { _ = page.Close() })
 	page.Timeout(defaultTimeout).MustWaitLoad()
-	tp := &testPage{Page: page, t: t}
-	tp.waitStable()
+	testPg := &testPage{Page: page, t: t}
+	testPg.waitStable()
 	// Wait until the WebSocket is connected. The ws extension
 	// stores the socket reference on the container element.
-	tp.Page.Timeout(defaultTimeout).MustWait(
+	testPg.Page.Timeout(defaultTimeout).MustWait(
 		`() => {
 			const el = document.getElementById('ws-container');
 			return el && el['htmx-internal-data']
@@ -68,24 +70,24 @@ func newPage(t *testing.T, browser *rod.Browser, server *Server) *testPage {
 				&& el['htmx-internal-data']['webSocket']['socket']
 				&& el['htmx-internal-data']['webSocket']['socket'].readyState === 1;
 		}`)
-	tp.waitStable()
-	return tp
+	testPg.waitStable()
+	return testPg
 }
 
 // fillAndSubmit selects gender and role on the landing page profile
 // form, force-enables the find match button, then clicks it.
-func fillAndSubmit(tp *testPage, gender, role string) {
-	tp.t.Helper()
-	tp.selectBoxSelect("gender", gender)
-	tp.selectBoxSelect("role", role)
+func fillAndSubmit(page *testPage, gender, role string) {
+	page.t.Helper()
+	page.selectBoxSelect("gender", gender)
+	page.selectBoxSelect("role", role)
 
 	// Enable the button and submit the form via JS click.
-	tp.js(`() => {
+	page.js(`() => {
 		const btn = document.getElementById('find-match-btn');
 		btn.disabled = false;
 		btn.click();
 	}`)
-	tp.waitStable()
+	page.waitStable()
 }
 
 // matchPair creates two pages, submits the profile form on each, and
@@ -116,7 +118,7 @@ func testLandingPage(t *testing.T, browser *rod.Browser, server *Server) {
 	page := newPage(t, browser, server)
 
 	title := page.Page.MustInfo().Title
-	assert.True(t, strings.Contains(title, "Yiff Chat"),
+	assert.Contains(t, title, "Yiff Chat",
 		"page title should contain 'Yiff Chat', got %q", title)
 
 	require.NotNil(t, page.elMaybe(SelectorProfileForm),
@@ -156,12 +158,10 @@ func testProfilePersistence(t *testing.T, browser *rod.Browser, server *Server) 
 	assert.Equal(t, "dominant", roleVal)
 
 	// Verify the display text shows the selected label.
-	genderText := page.js(
-		`() => document.querySelector('#profile-form button.select-trigger:has(input[name="gender"]) .select-value').textContent.trim()`)
+	genderText := page.js(selectDisplayText("gender"))
 	assert.Equal(t, "Male", genderText)
 
-	roleText := page.js(
-		`() => document.querySelector('#profile-form button.select-trigger:has(input[name="role"]) .select-value').textContent.trim()`)
+	roleText := page.js(selectDisplayText("role"))
 	assert.Equal(t, "Dominant", roleText)
 }
 
@@ -248,13 +248,11 @@ func testSettingsDrawer(t *testing.T, browser *rod.Browser, server *Server) {
 	}`)
 	pageA.waitStable()
 
-	genderText := pageA.js(
-		`() => document.querySelector('#profile-form button.select-trigger:has(input[name="gender"]) .select-value').textContent.trim()`)
+	genderText := pageA.js(selectDisplayText("gender"))
 	assert.Equal(t, "Male", genderText,
 		"settings drawer should show correct gender")
 
-	roleText := pageA.js(
-		`() => document.querySelector('#profile-form button.select-trigger:has(input[name="role"]) .select-value').textContent.trim()`)
+	roleText := pageA.js(selectDisplayText("role"))
 	assert.Equal(t, "Dominant", roleText,
 		"settings drawer should show correct role")
 }
@@ -271,7 +269,7 @@ func testCharacterCounter(t *testing.T, browser *rod.Browser, server *Server) {
 	counter := pageA.el(SelectorCharCount)
 	classes, err := counter.Attribute("class")
 	require.NoError(t, err)
-	assert.True(t, strings.Contains(*classes, "hidden"),
+	assert.Contains(t, *classes, "hidden",
 		"character counter should be hidden initially")
 
 	// Set 1850 chars via JS (remaining = 2000 - 1850 = 150).
@@ -292,6 +290,15 @@ func testCharacterCounter(t *testing.T, browser *rod.Browser, server *Server) {
 
 	counterClasses, err := pageA.el(SelectorCharCount).Attribute("class")
 	require.NoError(t, err)
-	assert.False(t, strings.Contains(*counterClasses, "hidden"),
+	assert.NotContains(t, *counterClasses, "hidden",
 		"character counter should be visible after threshold")
+}
+
+// selectDisplayText returns a JS expression that reads the visible
+// text of a selectbox trigger identified by its hidden input name.
+func selectDisplayText(name string) string {
+	return `() => document.querySelector(
+		'#profile-form button.select-trigger:has(input[name="` +
+		name + `"]) .select-value'
+	).textContent.trim()`
 }

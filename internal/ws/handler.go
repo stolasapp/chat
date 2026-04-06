@@ -90,17 +90,11 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-// RealIP extracts the client IP from the request, checking
-// X-Forwarded-For and X-Real-IP headers before falling back to
-// RemoteAddr. The port is stripped.
+// RealIP extracts the client IP from the request. It trusts only
+// X-Real-IP, which must be set by the reverse proxy (nginx).
+// X-Forwarded-For is ignored because clients can spoof it.
+// Falls back to RemoteAddr when the header is absent.
 func RealIP(request *http.Request) string {
-	if xff := request.Header.Get("X-Forwarded-For"); xff != "" {
-		// first entry is the original client
-		if ipAddr, _, ok := strings.Cut(xff, ","); ok {
-			return strings.TrimSpace(ipAddr)
-		}
-		return strings.TrimSpace(xff)
-	}
 	if xri := request.Header.Get("X-Real-Ip"); xri != "" {
 		return strings.TrimSpace(xri)
 	}

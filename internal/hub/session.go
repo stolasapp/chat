@@ -286,6 +286,9 @@ func (s *activeSession) relayChat(ctx context.Context, sender *Client, msg ChatM
 	if text == "" {
 		return
 	}
+	if len([]rune(text)) > view.MaxMessageLength {
+		return
+	}
 	text = sessionExcessiveNewlines.ReplaceAllString(text, "\n\n")
 
 	partner := s.partnerClient(sender.Token())

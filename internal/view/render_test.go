@@ -3,7 +3,6 @@ package view
 import (
 	"bytes"
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +13,7 @@ func TestChatView_NoMatchedSubstring(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	require.NoError(t, ChatView().Render(context.Background(), &buf))
-	assert.False(t, strings.Contains(buf.String(), MsgMatched),
+	assert.NotContains(t, buf.String(), MsgMatched,
 		"ChatView should not contain MsgMatched (breaks hub test assertions)")
 }
 

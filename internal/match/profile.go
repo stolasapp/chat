@@ -87,10 +87,6 @@ func excludeHit(excludes, interests catalog.Set[catalog.Interest]) bool {
 }
 
 const (
-	// jaccardDirections is the number of scoring directions
-	// (A->B and B->A) used to normalize the Jaccard.
-	jaccardDirections = 2.0
-
 	// wildcardScore is the score when either or both users have
 	// no interests selected. Treated as "open to anyone" with a
 	// small positive score so they match immediately without
@@ -106,20 +102,7 @@ func Score(profA, profB *Profile) float64 {
 		return wildcardScore
 	}
 
-	// compute match weight: 1.0 for each exact match
-	weightSum := 0.0
-	for interest := range profA.Interests {
-		if profB.Interests.Contains(interest) {
-			weightSum += 1.0
-		}
-	}
-	for interest := range profB.Interests {
-		if profA.Interests.Contains(interest) {
-			weightSum += 1.0
-		}
-	}
-
-	// union = |A| + |B| - |intersection|
+	// count intersection in a single pass; union follows from set identity
 	intersection := 0
 	for interest := range profA.Interests {
 		if profB.Interests.Contains(interest) {
@@ -132,5 +115,7 @@ func Score(profA, profB *Profile) float64 {
 		return 0
 	}
 
-	return weightSum / (jaccardDirections * float64(unionSize))
+	// weightSum = 2*intersection and we divide by jaccardDirections(2)*unionSize,
+	// so the expression reduces to intersection/unionSize.
+	return float64(intersection) / float64(unionSize)
 }

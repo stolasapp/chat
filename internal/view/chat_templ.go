@@ -289,8 +289,6 @@ func ChatView() templ.Component {
 				"aria-label":   "Message text",
 				"autocomplete": "off",
 				"maxlength":    strconv.Itoa(MaxMessageLength),
-				"oninput":      "updateCharCount(this)",
-				"onkeydown":    "if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit()}",
 			},
 			Class: "max-h-[50vh] pr-16",
 		}).Render(ctx, templ_7745c5c3_Buffer)
@@ -304,7 +302,7 @@ func ChatView() templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(ElementCharCount)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 79, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 77, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -341,10 +339,8 @@ func ChatView() templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = button.Button(button.Props{
+			ID:      "leave-btn",
 			Variant: button.VariantOutline,
-			Attributes: templ.Attributes{
-				"onclick": "openLeaveDialog()",
-			},
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -412,10 +408,8 @@ func ChatView() templ.Component {
 						return nil
 					})
 					templ_7745c5c3_Err = button.Button(button.Props{
+						ID:      "leave-cancel-btn",
 						Variant: button.VariantSecondary,
-						Attributes: templ.Attributes{
-							"onclick": "window.tui.dialog.close('leave-dialog')",
-						},
 					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -443,11 +437,9 @@ func ChatView() templ.Component {
 						return nil
 					})
 					templ_7745c5c3_Err = button.Button(button.Props{
+						ID:      "leave-confirm-btn",
 						Type:    button.TypeSubmit,
 						Variant: button.VariantDestructive,
-						Attributes: templ.Attributes{
-							"onclick": "window.tui.dialog.close('leave-dialog')",
-						},
 					}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -512,7 +504,7 @@ func ClientCount(count int) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(ElementClientCount)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 129, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 121, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -537,7 +529,7 @@ func ClientCount(count int) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 131, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 123, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -592,7 +584,7 @@ func TypingIndicator(active bool) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(ElementTyping)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 141, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 133, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -652,7 +644,7 @@ func ReconnectingIndicator(active bool) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(ElementTyping)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 165, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/chat.templ`, Line: 157, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {

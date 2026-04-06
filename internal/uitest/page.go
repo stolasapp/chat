@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/input"
 )
 
 const (
@@ -17,6 +16,7 @@ const (
 // and HTMX/WebSocket-aware helpers.
 type testPage struct {
 	*rod.Page
+
 	t *testing.T
 }
 
@@ -77,24 +77,8 @@ func (p *testPage) typeInto(selector, text string) {
 	p.waitStable()
 }
 
-// pressEnter sends the Enter key to the focused element.
-func (p *testPage) pressEnter() {
-	p.Page.Keyboard.MustType(input.Enter)
-}
-
 // reload reloads the page and waits for stability.
 func (p *testPage) reload() {
 	p.Page.Timeout(defaultTimeout).MustReload()
 	p.waitStable()
-}
-
-// messageTexts returns the text content of all child divs in the
-// messages area.
-func (p *testPage) messageTexts() []string {
-	msgs := p.els(SelectorMessages + " > div")
-	texts := make([]string, 0, len(msgs))
-	for _, msg := range msgs {
-		texts = append(texts, msg.MustText())
-	}
-	return texts
 }

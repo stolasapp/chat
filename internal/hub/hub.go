@@ -160,11 +160,12 @@ func (h *Hub) Register(
 	}
 }
 
-// Unregister enqueues a client for removal. Non-blocking.
+// Unregister enqueues a client for removal. Blocks until the event is
+// enqueued or the client is closed.
 func (h *Hub) Unregister(client *Client) {
 	select {
 	case h.unregister <- client:
-	default:
+	case <-client.Done():
 	}
 }
 

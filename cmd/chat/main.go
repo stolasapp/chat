@@ -16,6 +16,7 @@ import (
 
 func main() {
 	addr := flag.String("addr", envOr("ADDR", ":8080"), "listen address")
+	domain := flag.String("domain", envOr("DOMAIN", "http://localhost:8080"), "canonical domain URL")
 	debug := flag.Bool("debug", false, "enable debug logging")
 	hsts := flag.Bool("hsts", false, "enable HSTS header")
 	flag.Parse()
@@ -37,9 +38,11 @@ func main() {
 		sigCtx, stop := signal.NotifyContext(hubCtx, syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 		server.New(server.Config{
-			Addr: *addr,
-			Hub:  wsHub,
-			HSTS: *hsts,
+			Addr:           *addr,
+			Domain:         *domain,
+			Hub:            wsHub,
+			AllowedOrigins: []string{*domain},
+			HSTS:           *hsts,
 		}).ListenAndServe(sigCtx)
 	}()
 

@@ -57,7 +57,7 @@ func TestHandler_TokenOnConnect(t *testing.T) {
 	_, token, cleanup := dialTestServer(t)
 	defer cleanup()
 
-	assert.Len(t, token, 16, "session token should be 16 hex chars")
+	assert.Len(t, token, 32, "session token should be 32 hex chars")
 }
 
 func TestHandler_ClientRegistered(t *testing.T) {
@@ -219,25 +219,21 @@ func TestRealIP(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "x-forwarded-for single",
-			xff:      "1.2.3.4",
-			expected: "1.2.3.4",
-		},
-		{
-			name:     "x-forwarded-for multiple",
-			xff:      "1.2.3.4, 5.6.7.8",
-			expected: "1.2.3.4",
-		},
-		{
-			name:     "x-real-ip",
+			name:     "x-real-ip trusted",
 			xri:      "9.8.7.6",
 			expected: "9.8.7.6",
 		},
 		{
-			name:     "xff takes precedence over xri",
+			name:     "xff ignored in favor of xri",
 			xff:      "1.1.1.1",
 			xri:      "2.2.2.2",
-			expected: "1.1.1.1",
+			expected: "2.2.2.2",
+		},
+		{
+			name:     "xff alone is ignored",
+			xff:      "1.2.3.4",
+			remote:   "10.0.0.1:12345",
+			expected: "10.0.0.1",
 		},
 		{
 			name:     "remote addr with port",

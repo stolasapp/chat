@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+
 	"github.com/stolasapp/chat/internal/hub"
 	"github.com/stolasapp/chat/internal/match"
 	"github.com/stolasapp/chat/internal/static"
@@ -32,26 +33,29 @@ func newTestServer() *Server {
 
 	matcher := match.NewMatcher(match.DefaultMatchTimeout)
 	wsHub := hub.NewHub(matcher)
-	wsHub.GracePeriod = 2 * time.Second
+	wsHub.GracePeriod = 2 * time.Second //nolint:mnd // test-specific
 	wsHub.SearchCooldown = 0
-	wsHub.IdleTimeout = 30 * time.Second
-	wsHub.IdleWarning = 5 * time.Second
+	wsHub.IdleTimeout = 30 * time.Second //nolint:mnd // test-specific
+	wsHub.IdleWarning = 5 * time.Second  //nolint:mnd // test-specific
 
 	wsHandler := ws.NewHandler(wsHub, nil)
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /", templ.Handler(view.LandingPage()))
 	mux.Handle("GET /static/",
-		http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
+		http.StripPrefix("/static/", http.FileServer(http.FS(static.Assets))))
 	mux.Handle("GET /ws", wsHandler)
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		cancel()
 		panic(fmt.Sprintf("uitest: failed to listen: %v", err))
 	}
 
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second, //nolint:mnd // test server
+	}
 	done := make(chan struct{})
 
 	go func() {
@@ -82,7 +86,7 @@ func (s *Server) URL(path string) string {
 // Close shuts down the server and waits for the hub to drain.
 func (s *Server) Close() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(
-		context.Background(), 5*time.Second)
+		context.Background(), 5*time.Second) //nolint:mnd // test server
 	defer shutdownCancel()
 	_ = s.http.Shutdown(shutdownCtx)
 	s.cancel()

@@ -140,7 +140,7 @@ func LandingContent() templ.Component {
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(ElementProfileForm)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/landing.templ`, Line: 35, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/landing.templ`, Line: 36, Col: 32}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
@@ -422,7 +422,7 @@ func formSelectBoxWith(name string, label string, ph string, options []selectOpt
 				var templ_7745c5c3_Var16 string
 				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/landing.templ`, Line: 108, Col: 10}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/landing.templ`, Line: 109, Col: 10}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 				if templ_7745c5c3_Err != nil {
@@ -532,7 +532,7 @@ func formSelectBoxWith(name string, label string, ph string, options []selectOpt
 								var templ_7745c5c3_Var22 string
 								templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(opt.Label)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/landing.templ`, Line: 134, Col: 18}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/view/landing.templ`, Line: 135, Col: 18}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 								if templ_7745c5c3_Err != nil {

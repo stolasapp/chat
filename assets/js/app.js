@@ -54,10 +54,25 @@ document.addEventListener("htmx:oobAfterSwap", () => {
   }
 
   const input = document.getElementById(IDs.messageInput);
-  if (input !== null && !input.dataset.typingBound) {
-    input.dataset.typingBound = "true";
+  if (input !== null && !input.dataset.bound) {
+    input.dataset.bound = "true";
     input.addEventListener("input", onMessageInput);
+    input.addEventListener("input", () => updateCharCount(input));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        input.form.requestSubmit();
+      }
+    });
   }
+
+  bindClickOnce("leave-btn", () => openLeaveDialog());
+  bindClickOnce("leave-cancel-btn", () =>
+    window.tui.dialog.close("leave-dialog"),
+  );
+  bindClickOnce("leave-confirm-btn", () =>
+    window.tui.dialog.close("leave-dialog"),
+  );
 
   processNotifications();
 });
@@ -322,6 +337,18 @@ function expandPills(trigger) {
   });
 
   valueEl.appendChild(pillsDiv);
+}
+
+// --- DOM binding helpers ---
+
+// bindClickOnce attaches a click handler to an element by ID,
+// guarded by a data attribute so it only binds once per swap.
+function bindClickOnce(id, handler) {
+  const el = document.getElementById(id);
+  if (el !== null && !el.dataset.bound) {
+    el.dataset.bound = "true";
+    el.addEventListener("click", handler);
+  }
 }
 
 // --- Helpers ---

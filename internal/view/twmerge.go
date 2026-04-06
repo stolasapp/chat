@@ -25,7 +25,7 @@ func init() { //nolint:gochecknoinits // must replace global before concurrent u
 // safeCache implements cache.ICache with a sync.RWMutex.
 type safeCache struct {
 	mu   sync.RWMutex
-	data map[string]string
+	data map[string]string // +checklocks:mu
 }
 
 var _ cache.ICache = (*safeCache)(nil)
