@@ -1,0 +1,18 @@
+# Composite action for Nix setup with caching
+# https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action
+
+name: Setup Nix
+description: Install Nix and configure caching
+
+runs:
+  using: composite
+  steps:
+    - name: Install Nix
+      # https://github.com/DeterminateSystems/nix-installer-action
+      uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+
+    - name: Setup Nix cache
+      # https://github.com/DeterminateSystems/magic-nix-cache-action
+      uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+      with:
+        use-flakehub: false

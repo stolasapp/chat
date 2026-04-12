@@ -24,7 +24,8 @@ func TestUI(t *testing.T) {
 	server := newTestServer()
 	t.Cleanup(server.Close)
 
-	browserURL := launcher.New().Headless(true).MustLaunch()
+	path, _ := launcher.LookPath()
+	browserURL := launcher.New().Bin(path).Headless(true).MustLaunch()
 	browser := rod.New().ControlURL(browserURL).MustConnect()
 	t.Cleanup(func() { _ = browser.Close() })
 

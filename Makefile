@@ -54,6 +54,10 @@ sources:
 build: generate
 	$(GO) build -o $(BIN)/chat ./cmd/chat
 
+.PHONY: build-nix
+build-nix:
+	nix build
+
 .PHONY: dev
 dev:
 	$(GO) tool air
@@ -65,6 +69,14 @@ check: test lint
 test:
 	$(GO) test $(GO_TEST_FLAGS) $(ARGS) ./...
 
+.PHONY: test-unit
+test-unit:
+	$(GO) test $(GO_TEST_FLAGS) -short $(ARGS) ./...
+
+.PHONY: test-ui
+test-ui:
+	$(GO) test $(GO_TEST_FLAGS) $(ARGS) ./internal/uitest/...
+
 .PHONY: lint
 lint:
 	$(GO) tool golangci-lint run $(ARGS)
@@ -73,6 +85,12 @@ lint:
 .PHONY: format
 format:
 	$(GO) tool golangci-lint fmt
+
+.PHONY: update
+update:
+	$(GO) get -u ./...
+	$(GO) mod tidy
+	nix flake update
 
 .PHONY: clean
 clean:

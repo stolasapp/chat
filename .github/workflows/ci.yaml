@@ -1,0 +1,53 @@
+# CI workflow
+# https://docs.github.com/en/actions/writing-workflows
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request:
+    branches:
+      - main
+      - "release/**"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Generate code
+        run: make generate
+
+      - name: Verify clean git status
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated code is not up to date. Run 'make generate' and commit the changes."
+            git status
+            git diff
+            exit 1
+          fi
+
+      - name: Run unit tests
+        run: make test-unit
+
+      - name: Run linter
+        run: make lint
