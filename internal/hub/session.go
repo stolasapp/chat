@@ -264,9 +264,13 @@ func (s *activeSession) handleMessage(ctx context.Context, event msgEvent) bool 
 
 	switch msg := parsed.(type) {
 	case ChatMessage:
-		s.relayChat(ctx, event.client, msg)
+		if !s.ended {
+			s.relayChat(ctx, event.client, msg)
+		}
 	case TypingMessage:
-		s.relayTyping(ctx, event.client, msg)
+		if !s.ended {
+			s.relayTyping(ctx, event.client, msg)
+		}
 	case LeaveMessage:
 		s.handleLeave(ctx, event.client)
 		return true
