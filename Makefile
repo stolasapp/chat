@@ -45,9 +45,9 @@ js:
 sources:
 	@TEMPLUI_PATH=$$($(GO) list -m -f '{{.Dir}}' github.com/templui/templui 2>/dev/null || echo "") && \
 	if [ -n "$$TEMPLUI_PATH" ]; then \
-	  printf '@source "./**/*.templ";\n@source "%s/components/**/*.templ";\n' "$$TEMPLUI_PATH"; \
+	  printf '@source "../../**/*.templ";\n@source "%s/components/**/*.templ";\n' "$$TEMPLUI_PATH"; \
 	else \
-	  printf '@source "./**/*.templ";\n'; \
+	  printf '@source "../../**/*.templ";\n'; \
 	fi > assets/css/sources.generated.css
 
 .PHONY: build
